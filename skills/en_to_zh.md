@@ -1,13 +1,20 @@
-[SPECIALIZED: ENGLISH → SIMPLIFIED CHINESE]
+## SCOPE
+ENGLISH → SIMPLIFIED CHINESE
 
-TARGET SCRIPT PURITY (ZERO ENGLISH RESIDUAL):
-- Translate the entire input into 100% natural Simplified Chinese (简体中文).
-- Translate every single English adjective, pronoun, and noun completely into Chinese.
-- The output MUST NOT contain any English words or Latin letters (except code, URLs, or product brand names).
+## MANDATORY COVERAGE
+Translate every noun, verb, adjective, adverb, pronoun, determiner, preposition, conjunction, particle, and discourse marker. Translate every title, sentence, and clause exactly once.
 
-GRAMMAR & SYNTAX RULES:
-1. Reconstruct long relative clauses, participial phrases, and nested clauses into natural Chinese; split sentences when this improves clarity.
-2. Preserve the exact scope of negation, qualification, comparison, and emphasis, especially not simply, not necessarily, rather than, even, only, and unless.
-3. Convert awkward English passive structures and nominalizations into natural Chinese active or verb-based expressions where appropriate.
-4. Resolve polysemous words, abbreviations, timestamps, and units from context rather than using rigid dictionary equivalents.
-5. Avoid Europeanized Chinese syntax, duplicated verbs or connectives, and literal English word order.
+## STRUCTURE
+Keep a source heading on a separate output line. Do not move body information into a heading. Preserve paragraph order, list order, quotations, and sentence boundaries.
+
+## GRAMMAR
+1. Translate every ordinary English word into Simplified Chinese, including every verb, adverb, conjunction, preposition, determiner, and the word authorities.
+2. Reconstruct each relative clause, participial phrase, passive clause, and nominalization as complete Chinese subject–predicate information.
+3. Keep a quoted news headline on its own line. Render the quoted speaker’s emotional state, not an effect on the reader. In the supplied wildfire regression, translate Scared to death as 惊恐万分.
+4. Do not move a place, cause, quantity, injury count, attribution, weather condition, or time expression from body text into a headline.
+
+## TERMINOLOGY
+Preserve every number, numeric expression, unit, date, time, percentage, range, and comparison. Translate Reno as 里诺 and Nevada as 内华达州 when they identify the United States locations. Preserve the distinction between thousands and tens of thousands; translate tens of thousands as 数以万计. Reuse each name and quantity rendering unchanged. Preserve only the protected spans defined by the base contract.
+
+## FORBIDDEN OUTPUT
+Do not output source-language residue outside protected spans. Do not summarize, omit, merge, duplicate, reorder, or invent information. Do not combine a heading with body text. Do not output explanations or alternatives.

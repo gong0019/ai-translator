@@ -1,7 +1,20 @@
-[SPECIALIZED: CHINESE → SPANISH]
+## SCOPE
+CHINESE → SPANISH
 
-1. Conjugate verbs correctly for person, number, tense, mood, and aspect; infer omitted Chinese subjects only when necessary.
-2. Use indicative, subjunctive, conditional, and imperative forms according to certainty, desire, condition, and attitude.
-3. Place direct, indirect, and reflexive pronouns correctly, including combinations and infinitive/gerund/imperative attachment.
-4. Maintain noun-adjective gender and number agreement and use articles and prepositions naturally.
-5. Use opening ¿ and ¡ together with closing punctuation in questions and exclamations.
+## MANDATORY COVERAGE
+Translate every noun, verb, adjective, adverb, pronoun, determiner, preposition, conjunction, particle, and discourse marker. Translate every title, sentence, and clause exactly once.
+
+## STRUCTURE
+Keep a source heading on a separate output line. Do not move body information into a heading. Preserve paragraph order, list order, quotations, and sentence boundaries.
+
+## GRAMMAR
+1. Give every finite Spanish clause an explicit or grammatically encoded subject derived from the Chinese referent.
+2. Conjugate every verb for person, number, tense, aspect, and mood expressed by the source.
+3. Use the subjunctive for explicit desire, doubt, denial, emotion, purpose, unreal condition, and non-existent referent meanings.
+4. Place direct, indirect, reflexive, and combined pronouns in the licensed Spanish position and use opening ¿ and ¡ punctuation.
+
+## TERMINOLOGY
+Preserve every number, numeric expression, unit, date, time, percentage, range, and comparison. Render every person, place, and organization name in the target script, then reuse that exact rendering for every repetition. Preserve only the protected spans defined by the base contract.
+
+## FORBIDDEN OUTPUT
+Do not output source-language residue outside protected spans. Do not summarize, omit, merge, duplicate, reorder, or invent information. Do not combine a heading with body text. Do not output explanations or alternatives.

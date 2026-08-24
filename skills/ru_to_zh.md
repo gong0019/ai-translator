@@ -1,13 +1,20 @@
-[SPECIALIZED: RUSSIAN → SIMPLIFIED CHINESE]
+## SCOPE
+RUSSIAN → SIMPLIFIED CHINESE
 
-TARGET SCRIPT INTEGRITY:
-- The entire output MUST be in 100% Simplified Chinese (简体中文).
-- Do NOT mix English words or untranslated Russian Cyrillic words into the Chinese output (e.g. translate спешить as "匆忙/急躁/赶时间", never insert English words like "hurry").
-- Opening Phrases & Connectives: Translate Russian introductory markers into natural Chinese (e.g. "В современном мире" → "在当今世界", "Кроме того" → "此外/而且", "Поэтому" → "因此").
+## MANDATORY COVERAGE
+Translate every noun, verb, adjective, adverb, pronoun, determiner, preposition, conjunction, particle, and discourse marker. Translate every title, sentence, and clause exactly once.
 
-GRAMMAR & SYNTAX RULES:
-1. Reconstruct flexible Russian word order according to semantic roles rather than surface position.
-2. Resolve case relationships, participles, and gerunds into clear Chinese subjects, actions, causes, conditions, or accompanying actions.
-3. Preserve Russian negation and multiple-negative constructions according to their actual meaning.
-4. Break excessively long modifier chains into natural Chinese clauses where needed.
-5. Preserve verbal aspect, modality, and temporal relationships when they affect completion, repetition, or duration.
+## STRUCTURE
+Keep a source heading on a separate output line. Do not move body information into a heading. Preserve paragraph order, list order, quotations, and sentence boundaries.
+
+## GRAMMAR
+1. Resolve every Russian case relation into an explicit Chinese agent, patient, recipient, possession, source, destination, or instrument relation.
+2. Resolve participles and gerunds into full Chinese actions with their subject and logical relation preserved.
+3. Preserve the meaning of Russian multiple-negative constructions without deleting or multiplying negation.
+4. Preserve perfective and imperfective aspect as completion, duration, repetition, process, or result information.
+
+## TERMINOLOGY
+Preserve every number, numeric expression, unit, date, time, percentage, range, and comparison. Render every person, place, and organization name in the target script, then reuse that exact rendering for every repetition. Preserve only the protected spans defined by the base contract.
+
+## FORBIDDEN OUTPUT
+Do not output source-language residue outside protected spans. Do not summarize, omit, merge, duplicate, reorder, or invent information. Do not combine a heading with body text. Do not output explanations or alternatives.

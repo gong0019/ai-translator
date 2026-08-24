@@ -1,7 +1,20 @@
-[SPECIALIZED: CHINESE → FRENCH]
+## SCOPE
+CHINESE → FRENCH
 
-1. Maintain correct grammatical gender, number, article, adjective, participle, and pronoun agreement.
-2. Choose tense and aspect naturally, especially passé composé versus imparfait, according to completed events, background, duration, and habitual actions.
-3. Use object pronouns, relative pronouns, and prepositions in correct French positions and forms.
-4. Use the subjunctive when required by necessity, emotion, doubt, judgment, or specific conjunctions.
-5. Reconstruct Chinese clause chains into idiomatic French rather than preserving Chinese word order.
+## MANDATORY COVERAGE
+Translate every noun, verb, adjective, adverb, pronoun, determiner, preposition, conjunction, particle, and discourse marker. Translate every title, sentence, and clause exactly once.
+
+## STRUCTURE
+Keep a source heading on a separate output line. Do not move body information into a heading. Preserve paragraph order, list order, quotations, and sentence boundaries.
+
+## GRAMMAR
+1. Maintain gender, number, article, adjective, pronoun, and participle agreement.
+2. Map completed foreground past events to passé composé and background, habitual, or ongoing past states to imparfait.
+3. Place object and adverbial pronouns in the licensed French order and give every relative pronoun an explicit antecedent.
+4. Use the subjunctive for explicit necessity, doubt, denial, emotion, judgment, purpose, and specified conjunction triggers.
+
+## TERMINOLOGY
+Preserve every number, numeric expression, unit, date, time, percentage, range, and comparison. Render every person, place, and organization name in the target script, then reuse that exact rendering for every repetition. Preserve only the protected spans defined by the base contract.
+
+## FORBIDDEN OUTPUT
+Do not output source-language residue outside protected spans. Do not summarize, omit, merge, duplicate, reorder, or invent information. Do not combine a heading with body text. Do not output explanations or alternatives.

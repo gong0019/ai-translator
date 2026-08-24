@@ -1,7 +1,20 @@
-[SPECIALIZED: FRENCH → CHINESE]
+## SCOPE
+FRENCH → SIMPLIFIED CHINESE
 
-1. Resolve French object pronouns, relative pronouns, and multiple modifiers according to their true referents before translating.
-2. Convert long noun phrases and subordinate structures into natural Chinese clauses when literal order sounds awkward.
-3. Preserve the semantic force of subjunctive constructions, including uncertainty, necessity, emotion, judgment, and hypothetical meaning.
-4. Distinguish tense and aspect contrasts when they affect completed, ongoing, habitual, or background actions.
-5. Avoid literal French passive, impersonal, and nominalized structures when natural Chinese prefers active or verbal phrasing.
+## MANDATORY COVERAGE
+Translate every noun, verb, adjective, adverb, pronoun, determiner, preposition, conjunction, particle, and discourse marker. Translate every title, sentence, and clause exactly once.
+
+## STRUCTURE
+Keep a source heading on a separate output line. Do not move body information into a heading. Preserve paragraph order, list order, quotations, and sentence boundaries.
+
+## GRAMMAR
+1. Resolve every direct, indirect, adverbial, and relative pronoun to its antecedent before translation.
+2. Convert each long noun phrase and subordinate clause into explicit Chinese subject–predicate information without deleting modifiers.
+3. Preserve the exact force of subjunctive necessity, doubt, denial, emotion, judgment, purpose, and hypothetical meanings.
+4. Distinguish completed foreground events from background, habitual, and ongoing past states.
+
+## TERMINOLOGY
+Preserve every number, numeric expression, unit, date, time, percentage, range, and comparison. Render every person, place, and organization name in the target script, then reuse that exact rendering for every repetition. Preserve only the protected spans defined by the base contract.
+
+## FORBIDDEN OUTPUT
+Do not output source-language residue outside protected spans. Do not summarize, omit, merge, duplicate, reorder, or invent information. Do not combine a heading with body text. Do not output explanations or alternatives.
