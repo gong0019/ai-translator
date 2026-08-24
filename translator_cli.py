@@ -96,26 +96,29 @@ def load_skill(skill_name: str) -> str:
 
 def detect_language(text: str):
     """通过字符集 + 词频投票高效嗅探源语言 (Python 确定性路由层)"""
-    # 1. 独立字符集特征 (日、韩、俄、中)
-    if re.search(r'[\u3040-\u309F\u30A0-\u30FF]', text):
-        return "ja", CODE_TO_LANG["ja"]["en"]
-    if re.search(r'[\uAC00-\uD7AF\u1100-\u11FF]', text):
-        return "ko", CODE_TO_LANG["ko"]["en"]
-    if re.search(r'[\u0400-\u04FF]', text):
-        return "ru", CODE_TO_LANG["ru"]["en"]
-    
     chinese_chars = len(re.findall(r'[\u4E00-\u9FFF]', text))
+    kana_chars = len(re.findall(r'[\u3040-\u309F\u30A0-\u30FF]', text))
+    hangul_chars = len(re.findall(r'[\uAC00-\uD7AF\u1100-\u11FF]', text))
+    cyrillic_chars = len(re.findall(r'[\u0400-\u04FF]', text))
     eng_words = re.findall(r'[a-zA-Z]{2,}', text)
-    
-    # 检测中英夹杂（Chinglish）：既有汉字又有夹带英文单词
-    if chinese_chars > 0 and len(eng_words) > 0:
+
+    # 1. 混合句判定 (以中文为基础主干，夹杂了英文单词、日文词汇/假名或韩文)
+    if chinese_chars > 0 and (len(eng_words) > 0 or (kana_chars > 0 and chinese_chars >= kana_chars)):
         return "mixed", "Mixed / Chinglish"
 
-    # 纯中文
+    # 2. 独立字符集特征 (日、韩、俄)
+    if kana_chars > 0:
+        return "ja", CODE_TO_LANG["ja"]["en"]
+    if hangul_chars > 0:
+        return "ko", CODE_TO_LANG["ko"]["en"]
+    if cyrillic_chars > 0:
+        return "ru", CODE_TO_LANG["ru"]["en"]
+
+    # 3. 纯中文
     if chinese_chars > 0:
         return "zh", CODE_TO_LANG["zh"]["en"]
     
-    # 2. 特殊变音/符号特征
+    # 4. 特殊变音/符号特征
     if re.search(r'[äöüßÄÖÜ]', text):
         return "de", CODE_TO_LANG["de"]["en"]
     if re.search(r'[¿¡ñÑ]', text):
@@ -123,7 +126,7 @@ def detect_language(text: str):
     if re.search(r'[œŒçÇ]', text):
         return "fr", CODE_TO_LANG["fr"]["en"]
 
-    # 3. 欧语停用词词频投票 (英、德、法、西、意)
+    # 5. 欧语停用词词频投票 (英、德、法、西、意)
     words = [w.lower() for w in re.findall(r'[a-zA-Zà-öø-ÿÀ-ÖØ-ß\']+', text)]
     if words:
         scores = {"en": 0, "de": 0, "fr": 0, "es": 0, "it": 0}
@@ -488,12 +491,12 @@ class TranslatorCLI:
         target_code = self.target_lang_item["code"]
         target_name = self.target_lang_item["en"]
 
-        # 处理中英混杂句（Chinglish 净化为纯中文）
+        # 处理中英/中日等混合夹杂句（转换为纯正简体中文）
         if source_code == "mixed":
             if target_code == "zh":
                 skill_prompt = load_skill("mixed_to_zh")
                 if skill_prompt:
-                    return skill_prompt, "Chinglish (中英夹杂)", "Simplified Chinese (简体中文)"
+                    return skill_prompt, "Mixed / 混合夹杂", "Simplified Chinese (简体中文)"
             source_code = "zh"
             source_name = CODE_TO_LANG["zh"]["en"]
         
