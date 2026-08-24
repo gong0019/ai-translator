@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # AI Terminal Translator - Universal GGUF Installer
-# Features: Self-Healing on Interruption, Domestic/Global Auto-Routing, Anti-Sudo Trap, TUI
+# Features: Zero Hardcoding, Cross-Platform Support, Domestic/Global Auto-Routing, TUI
 # Options: ./install.sh [--clean | --reinstall]
 # ==============================================================================
 
@@ -10,13 +10,11 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
-# 1. 参数解析 (--clean / --reinstall)
 CLEAN_MODE=false
 if [ "$1" == "--clean" ] || [ "$1" == "--reinstall" ] || [ "$1" == "-f" ]; then
     CLEAN_MODE=true
 fi
 
-# 2. 检测真实用户与家目录 (防止 sudo 权限污染)
 if [ -n "$SUDO_USER" ]; then
     REAL_USER="$SUDO_USER"
     REAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
@@ -25,7 +23,6 @@ else
     REAL_HOME="$HOME"
 fi
 
-# 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -40,7 +37,6 @@ echo "║           🌐 AI Terminal Translator - Automated Setup          ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# 处理 --clean 强制清理模式
 if [ "$CLEAN_MODE" = true ]; then
     echo -e "${YELLOW}🧹 触发 --clean 模式：正在清理历史虚拟环境与临时缓存...${NC}"
     rm -rf .venv
@@ -48,7 +44,7 @@ if [ "$CLEAN_MODE" = true ]; then
     echo -e "${GREEN}✓ 历史残留清理完毕，即将开始全新纯净安装。${NC}\n"
 fi
 
-# 3. 网络区域智能探测 (国内外镜像自动分流)
+# 1. 网络探测
 detect_network_region() {
     echo -e "${CYAN}[1/6] 正在探测网络环境与测速...${NC}"
     
@@ -65,9 +61,9 @@ detect_network_region() {
     fi
 }
 
-# 4. 检查并安装系统级依赖
+# 2. 系统底层依赖安装 (包含全 9 语种 OCR 支持包)
 install_system_dependencies() {
-    echo -e "${CYAN}[2/6] 正在检查与安装系统底层依赖 (OCR、C++ 编译环境、剪贴板)...${NC}"
+    echo -e "${CYAN}[2/6] 正在检查与安装系统底层依赖 (全语种 OCR、C++ 编译环境、剪贴板)...${NC}"
     
     if [ "$EUID" -ne 0 ]; then
         SUDO_CMD="sudo"
@@ -82,16 +78,20 @@ install_system_dependencies() {
             python3 python3-pip python3-venv \
             build-essential cmake \
             tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng tesseract-ocr-jpn \
+            tesseract-ocr-kor tesseract-ocr-rus tesseract-ocr-deu tesseract-ocr-fra \
+            tesseract-ocr-spa tesseract-ocr-ita \
             xclip wl-clipboard whiptail curl 2>/dev/null || true
     elif which dnf >/dev/null 2>&1; then
         $SUDO_CMD dnf install -y \
             python3 python3-pip python3-devel gcc-c++ cmake \
-            tesseract tesseract-langpack-chi_sim tesseract-langpack-jpn \
+            tesseract tesseract-langpack-chi_sim tesseract-langpack-jpn tesseract-langpack-kor \
+            tesseract-langpack-rus tesseract-langpack-deu tesseract-langpack-fra tesseract-langpack-spa tesseract-langpack-ita \
             xclip wl-clipboard newt curl || true
     elif which pacman >/dev/null 2>&1; then
         $SUDO_CMD pacman -Sy --noconfirm \
             python python-pip python-virtualenv base-devel cmake \
-            tesseract tesseract-data-chi_sim tesseract-data-jpn \
+            tesseract tesseract-data-chi_sim tesseract-data-jpn tesseract-data-kor \
+            tesseract-data-rus tesseract-data-deu tesseract-data-fra tesseract-data-spa tesseract-data-ita \
             xclip wl-clipboard libnewt curl || true
     elif [[ "$OSTYPE" == "darwin"* ]] && which brew >/dev/null 2>&1; then
         brew install python cmake tesseract tesseract-lang || true
@@ -99,7 +99,7 @@ install_system_dependencies() {
     echo -e "${GREEN}✓ 系统依赖检查完成${NC}\n"
 }
 
-# 5. 自愈型 Python 虚拟环境配置
+# 3. Python 虚拟环境
 setup_python_environment() {
     echo -e "${CYAN}[3/6] 正在配置项目隔离 Python 虚拟环境 (.venv)...${NC}"
     
@@ -135,7 +135,7 @@ setup_python_environment() {
     echo -e "${GREEN}✓ Python 环境就绪${NC}\n"
 }
 
-# 6. TUI 交互式选择模型
+# 4. 模型交互选择
 select_and_download_models() {
     echo -e "${CYAN}[4/6] 配置本地 AI 模型...${NC}"
     mkdir -p "$PROJECT_DIR/models"
@@ -232,7 +232,7 @@ while True:
     echo -e "${GREEN}✓ 模型配置完成${NC}\n"
 }
 
-# 7. 跨平台桌面路径探测
+# 5. 桌面路径
 get_desktop_dir() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "$REAL_HOME/Desktop"
@@ -270,7 +270,7 @@ get_desktop_dir() {
     fi
 }
 
-# 8. 桌面快捷方式与全局命令配置
+# 6. 桌面快捷方式与全局命令
 configure_launchers() {
     echo -e "${CYAN}[5/6] 桌面快捷方式与全局命令配置...${NC}"
     
@@ -308,7 +308,7 @@ Version=1.0
 Type=Application
 Name=AI 终端翻译器
 Comment=Universal Local AI Translator powered by GGUF
-Exec=gnome-terminal --geometry=95x28 --title="AI 终端翻译器" -- bash -c "$PROJECT_DIR/run.sh; exec bash"
+Exec=gnome-terminal --title="AI 终端翻译器" -- bash -c "$PROJECT_DIR/run.sh; exec bash"
 Icon=accessories-dictionary
 Terminal=false
 Categories=Utility;Translation;Development;
@@ -344,7 +344,6 @@ LINUX_EOF
     fi
 }
 
-# 9. 安装完成总结
 finish_installation() {
     echo -e "\n${CYAN}[6/6] 安装与配置全部完成！${NC}"
     echo -e "${GREEN}${BOLD}================================================================${NC}"
@@ -354,16 +353,9 @@ finish_installation() {
     echo -e "  1. 双击桌面上的 ${BOLD}「AI 终端翻译器」${NC} 图标"
     echo -e "  2. 在任意终端输入：${CYAN}ai-trans${NC} (或 ${CYAN}qwen-trans${NC})"
     echo -e "  3. 在项目根目录执行：${CYAN}./run.sh${NC}"
-    echo -e "\n快捷指令速查："
-    echo -e "  • ${BOLD}Ctrl+V${NC} : 智能粘贴 (截图自动本地 OCR 识别并保留排版翻译)"
-    echo -e "  • ${BOLD}/lang${NC}  : 切换目标输出语言"
-    echo -e "  • ${BOLD}/model${NC} : 动态切换 models/ 目录下的任意 GGUF 模型"
-    echo -e "  • ${BOLD}/sleep${NC} : 立即休眠清空内存 (平时 1分钟闲置自动休眠 0 MB)"
-    echo -e "  • ${BOLD}/quit${NC}  : 退出程序"
     echo -e "${GREEN}================================================================${NC}\n"
 }
 
-# 执行完整流水线
 detect_network_region
 install_system_dependencies
 setup_python_environment

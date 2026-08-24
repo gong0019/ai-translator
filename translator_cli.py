@@ -4,7 +4,7 @@
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
 Architecture: Python Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: Atomic Fsync Persistence, Paragraph-Preserving Streamer, Fixed Bottom Status Toolbar & Live Header Sync
+Features: Zero-Hardcoding Architecture, Atomic Fsync, Dynamic OCR Language Discovery, Paragraph Streamer
 """
 
 import os
@@ -14,6 +14,7 @@ import time
 import json
 import gc
 import glob
+import tempfile
 import threading
 import subprocess
 import pyperclip
@@ -29,24 +30,41 @@ from llama_cpp import Llama
 
 console = Console()
 
-BASE_DIR = os.path.dirname(__file__)
+# 基础目录与跨平台临时路径
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILLS_DIR = os.path.join(BASE_DIR, "skills")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
+TEMP_DIR = tempfile.gettempdir()
+CLIPBOARD_OCR_PATH = os.path.join(TEMP_DIR, "ai_translator_clipboard_ocr.png")
 
-USER_CONFIG_DIR = os.path.expanduser("~/.config/ai-translator")
+# 用户全局配置与本地便携配置
+USER_CONFIG_DIR = os.path.expanduser("~/.config/ai-translator") if os.name != 'nt' else os.path.join(os.environ.get('APPDATA', BASE_DIR), "ai-translator")
 USER_CONFIG_FILE = os.path.join(USER_CONFIG_DIR, "config.json")
 LOCAL_CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
+# 9 大支持语种定义 (代码、名称、国旗图标、Tesseract OCR 语言代码)
 LANGUAGES = {
-    "1": ("中文", "Simplified Chinese", "zh", "🇨🇳"),
-    "2": ("英语", "English", "en", "🇬🇧"),
-    "3": ("日语", "Japanese", "ja", "🇯🇵"),
-    "4": ("韩语", "Korean", "ko", "🇰🇷"),
-    "5": ("德语", "German", "de", "🇩🇪"),
-    "6": ("法语", "French", "fr", "🇫🇷"),
-    "7": ("西班牙语", "Spanish", "es", "🇪🇸"),
-    "8": ("俄语", "Russian", "ru", "🇷🇺"),
-    "9": ("意大利语", "Italian", "it", "🇮🇹"),
+    "1": {"zh": "中文", "en": "Simplified Chinese", "code": "zh", "flag": "🇨🇳", "ocr": "chi_sim"},
+    "2": {"zh": "英语", "en": "English", "code": "en", "flag": "🇬🇧", "ocr": "eng"},
+    "3": {"zh": "日语", "en": "Japanese", "code": "ja", "flag": "🇯🇵", "ocr": "jpn"},
+    "4": {"zh": "韩语", "en": "Korean", "code": "ko", "flag": "🇰🇷", "ocr": "kor"},
+    "5": {"zh": "德语", "en": "German", "code": "de", "flag": "🇩🇪", "ocr": "deu"},
+    "6": {"zh": "法语", "en": "French", "code": "fr", "flag": "🇫🇷", "ocr": "fra"},
+    "7": {"zh": "西班牙语", "en": "Spanish", "code": "es", "flag": "🇪🇸", "ocr": "spa"},
+    "8": {"zh": "俄语", "en": "Russian", "code": "ru", "flag": "🇷🇺", "ocr": "rus"},
+    "9": {"zh": "意大利语", "en": "Italian", "code": "it", "flag": "🇮🇹", "ocr": "ita"},
+}
+
+# 默认可配置超参数 (支持从 config.json 覆盖)
+DEFAULT_CONFIG = {
+    "target_lang_key": "1",
+    "selected_model_filename": "",
+    "auto_copy": True,
+    "idle_timeout": 60,
+    "n_ctx": 8192,
+    "temperature": 0.1,
+    "repeat_penalty": 1.08,
+    "max_tokens": 4096
 }
 
 def load_skill(skill_name: str) -> str:
@@ -77,54 +95,70 @@ def detect_language(text: str):
     return "en", "English"
 
 def grab_clipboard_image():
-    """检测并提取剪贴板中的图片保存为临时文件"""
-    tmp_path = "/tmp/ai_translator_clipboard_ocr.png"
-    if os.path.exists(tmp_path):
+    """检测并提取剪贴板中的图片保存为跨平台安全临时文件"""
+    if os.path.exists(CLIPBOARD_OCR_PATH):
         try:
-            os.remove(tmp_path)
+            os.remove(CLIPBOARD_OCR_PATH)
         except Exception:
             pass
 
     try:
         im = ImageGrab.grabclipboard()
         if isinstance(im, Image.Image):
-            im.save(tmp_path)
-            return tmp_path
+            im.save(CLIPBOARD_OCR_PATH)
+            return CLIPBOARD_OCR_PATH
     except Exception:
         pass
 
-    try:
-        p = subprocess.run(
-            ["xclip", "-selection", "clipboard", "-t", "image/png", "-o"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL
-        )
-        if p.returncode == 0 and len(p.stdout) > 0:
-            with open(tmp_path, "wb") as f:
-                f.write(p.stdout)
-            return tmp_path
-    except Exception:
-        pass
+    if os.name != 'nt':
+        try:
+            p = subprocess.run(
+                ["xclip", "-selection", "clipboard", "-t", "image/png", "-o"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL
+            )
+            if p.returncode == 0 and len(p.stdout) > 0:
+                with open(CLIPBOARD_OCR_PATH, "wb") as f:
+                    f.write(p.stdout)
+                return CLIPBOARD_OCR_PATH
+        except Exception:
+            pass
 
-    try:
-        p = subprocess.run(
-            ["wl-paste", "--type", "image/png"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL
-        )
-        if p.returncode == 0 and len(p.stdout) > 0:
-            with open(tmp_path, "wb") as f:
-                f.write(p.stdout)
-            return tmp_path
-    except Exception:
-        pass
+        try:
+            p = subprocess.run(
+                ["wl-paste", "--type", "image/png"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL
+            )
+            if p.returncode == 0 and len(p.stdout) > 0:
+                with open(CLIPBOARD_OCR_PATH, "wb") as f:
+                    f.write(p.stdout)
+                return CLIPBOARD_OCR_PATH
+        except Exception:
+            pass
 
     return None
 
-def ocr_extract_text(img_path):
-    """调用本地 tesseract 提取文本并保留空间排版"""
+def get_installed_tesseract_languages():
+    """动态获取本地 Tesseract 实际已安装的所有语言包"""
     try:
-        cmd = ["tesseract", img_path, "stdout", "-l", "chi_sim+eng+jpn", "--psm", "3"]
+        res = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True)
+        if res.returncode == 0:
+            langs = [line.strip() for line in res.stdout.splitlines() if line.strip() and not line.startswith("List of")]
+            return langs
+    except Exception:
+        pass
+    return ["chi_sim", "eng"]
+
+def ocr_extract_text(img_path):
+    """调用本地 tesseract 动态加载已安装的多国语言包进行全语种排版识别"""
+    try:
+        available_langs = get_installed_tesseract_languages()
+        # 匹配我们支持的目标 OCR 语种
+        active_langs = [l for l in ["chi_sim", "eng", "jpn", "kor", "rus", "deu", "fra", "spa", "ita"] if l in available_langs]
+        lang_arg = "+".join(active_langs) if active_langs else "eng"
+
+        cmd = ["tesseract", img_path, "stdout", "-l", lang_arg, "--psm", "3"]
         res = subprocess.run(cmd, capture_output=True, text=True)
         return res.stdout.strip()
     except Exception as e:
@@ -151,11 +185,8 @@ def format_model_name(filename: str) -> str:
 
 class TranslatorCLI:
     def __init__(self):
-        # 默认配置
-        self.target_lang_key = "1"
-        self.auto_copy = True
-        self.saved_model_filename = ""
-        self.idle_timeout = 60
+        # 初始化可配置参数
+        self.config = dict(DEFAULT_CONFIG)
         self.last_active_time = time.time()
         self.is_busy = False
         self.llm = None
@@ -195,10 +226,10 @@ class TranslatorCLI:
                 except Exception:
                     pass
 
-        # 底部常驻状态栏 (Fixed Bottom Toolbar)
+        # 底部常驻状态栏
         def get_bottom_toolbar():
             engine_status = "[Active]" if self.llm is not None else "[0 MB Sleep]"
-            copy_status = "ON" if self.auto_copy else "OFF"
+            copy_status = "ON" if self.config.get("auto_copy", True) else "OFF"
             model_disp = self.get_current_model_name()
             lang_disp = self.target_lang_display
             return HTML(
@@ -219,8 +250,28 @@ class TranslatorCLI:
         self.watchdog = threading.Thread(target=self._idle_watchdog, daemon=True)
         self.watchdog.start()
 
+    @property
+    def target_lang_key(self):
+        return str(self.config.get("target_lang_key", "1"))
+
+    @target_lang_key.setter
+    def target_lang_key(self, val):
+        self.config["target_lang_key"] = str(val)
+
+    @property
+    def auto_copy(self):
+        return bool(self.config.get("auto_copy", True))
+
+    @auto_copy.setter
+    def auto_copy(self, val):
+        self.config["auto_copy"] = bool(val)
+
+    @property
+    def idle_timeout(self):
+        return int(self.config.get("idle_timeout", 60))
+
     def load_config(self):
-        """优先从 ~/.config/ai-translator/config.json 读取，次选本地 config.json"""
+        """优先从用户主目录读取配置，次选项目目录便携配置"""
         target_file = None
         if os.path.exists(USER_CONFIG_FILE):
             target_file = USER_CONFIG_FILE
@@ -231,47 +282,38 @@ class TranslatorCLI:
             try:
                 with open(target_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    self.target_lang_key = str(data.get("target_lang_key", "1"))
-                    self.auto_copy = bool(data.get("auto_copy", True))
-                    self.saved_model_filename = data.get("selected_model_filename", "")
-                    self.idle_timeout = int(data.get("idle_timeout", 60))
+                    self.config.update(data)
             except Exception:
                 pass
 
     def save_config(self):
-        """物理级即时落盘保存 (fsync)：写入 ~/.config/ai-translator/config.json 与项目目录"""
+        """双重原子落盘保存配置 (通过 fsync 确保窗口被杀死时依然物理持久化)"""
         current_fn = ""
         if self.active_model_idx in self.models_map:
             current_fn = self.models_map[self.active_model_idx]["filename"]
-            
-        data = {
-            "selected_model_filename": current_fn,
-            "target_lang_key": self.target_lang_key,
-            "auto_copy": self.auto_copy,
-            "idle_timeout": self.idle_timeout
-        }
-        
-        # 1. 物理写入用户主目录 ~/.config/ai-translator/config.json
+        self.config["selected_model_filename"] = current_fn
+
+        # 写入用户主目录
         try:
             os.makedirs(USER_CONFIG_DIR, exist_ok=True)
             with open(USER_CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
                 f.flush()
                 os.fsync(f.fileno())
         except Exception:
             pass
 
-        # 2. 物理写入项目本地 config.json
+        # 写入本地便携配置
         try:
             with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
                 f.flush()
                 os.fsync(f.fileno())
         except Exception:
             pass
 
     def refresh_available_models(self):
-        """自动扫描 models/ 目录下所有的 *.gguf 模型文件并动态编号"""
+        """动态扫描 models/ 目录下所有 *.gguf 模型并按修改时间与命名构建索引"""
         os.makedirs(MODELS_DIR, exist_ok=True)
         gguf_files = sorted(glob.glob(os.path.join(MODELS_DIR, "*.gguf")))
         
@@ -289,29 +331,26 @@ class TranslatorCLI:
             }
             idx += 1
 
+        saved_fn = self.config.get("selected_model_filename", "")
         found_saved = False
-        if self.saved_model_filename:
+        if saved_fn:
             for k, info in self.models_map.items():
-                if info["filename"] == self.saved_model_filename:
+                if info["filename"] == saved_fn:
                     self.active_model_idx = k
                     found_saved = True
                     break
 
-        if not found_saved:
-            found_pref = False
-            for pref in ["3b", "1.5b", "7b"]:
-                for k, info in self.models_map.items():
-                    if pref in info["filename"].lower():
-                        self.active_model_idx = k
-                        found_pref = True
-                        break
-                if found_pref:
+        if not found_saved and self.models_map:
+            # 优先选择常用模型，无则选择第 1 个
+            for k, info in self.models_map.items():
+                if "3b" in info["filename"].lower():
+                    self.active_model_idx = k
                     break
-            if not found_pref and self.models_map:
+            else:
                 self.active_model_idx = "1"
 
     def _idle_watchdog(self):
-        """闲置 60 秒自动清空模型常驻内存"""
+        """闲置超时自动清空模型内存 (0 MB 负载)"""
         while True:
             time.sleep(3)
             with self.lock:
@@ -353,9 +392,10 @@ class TranslatorCLI:
             self.llm = None
             gc.collect()
         
+        n_ctx = int(self.config.get("n_ctx", 8192))
         self.llm = Llama(
             model_path=model_path,
-            n_ctx=8192,
+            n_ctx=n_ctx,
             n_threads=os.cpu_count() or 4,
             verbose=False
         )
@@ -384,7 +424,7 @@ class TranslatorCLI:
     @property
     def target_lang_display(self):
         item = self.target_lang_item
-        return f"{item[3]} {item[0]} ({item[1]})"
+        return f"{item['flag']} {item['zh']} ({item['en']})"
 
     def print_header(self):
         model_name = self.get_current_model_name()
@@ -393,7 +433,7 @@ class TranslatorCLI:
         grid.add_column(justify="right")
         grid.add_row(
             f"[bold cyan]Input:[/] [yellow]🔍 智能语种嗅探[/] ➔ [bold cyan]Target:[/] [green]{self.target_lang_display}[/]",
-            f"[bold cyan]Model:[/] [green]{model_name}[/] | [dim]AutoSleep: 1m[/] | [dim]AutoCopy: {'[green]ON[/]' if self.auto_copy else '[red]OFF[/]'}[/]"
+            f"[bold cyan]Model:[/] [green]{model_name}[/] | [dim]AutoSleep: {self.idle_timeout}s[/] | [dim]AutoCopy: {'[green]ON[/]' if self.auto_copy else '[red]OFF[/]'}[/]"
         )
         console.print(Panel(
             grid,
@@ -404,8 +444,8 @@ class TranslatorCLI:
 
     def build_dynamic_prompt(self, text: str):
         source_code, source_name = detect_language(text)
-        target_code = self.target_lang_item[2]
-        target_name = self.target_lang_item[1]
+        target_code = self.target_lang_item["code"]
+        target_name = self.target_lang_item["en"]
         
         if source_code == target_code:
             if target_code == "zh":
@@ -450,7 +490,6 @@ class TranslatorCLI:
             if choice in self.models_map and choice != self.active_model_idx:
                 with self.lock:
                     self.active_model_idx = choice
-                    self.saved_model_filename = self.models_map[choice]["filename"]
                     self.save_config()
                     self._load_llama(self.models_map[choice]["path"])
                     self.last_active_time = time.time()
@@ -467,9 +506,9 @@ class TranslatorCLI:
 
     def switch_lang(self):
         console.print("\n[bold cyan]请选择翻译目标输出语言：[/]")
-        for k, (zh, en, _, flag) in LANGUAGES.items():
+        for k, item in LANGUAGES.items():
             current_flag = " [bold green](当前目标)[/]" if k == self.target_lang_key else ""
-            console.print(f"  [bold yellow]{k}[/]. {flag} {zh} ({en}){current_flag}")
+            console.print(f"  [bold yellow]{k}[/]. {item['flag']} {item['zh']} ({item['en']}){current_flag}")
         
         try:
             choice = input("\n请输入语言编号 [1-9]: ").strip()
@@ -521,6 +560,10 @@ class TranslatorCLI:
         full_translation = ""
         start_time = time.time()
 
+        temperature = float(self.config.get("temperature", 0.1))
+        repeat_penalty = float(self.config.get("repeat_penalty", 1.08))
+        max_tokens = int(self.config.get("max_tokens", 4096))
+
         try:
             raw_paragraphs = text.split('\n\n')
             paragraphs = [p.strip() for p in raw_paragraphs if p.strip()]
@@ -544,9 +587,9 @@ class TranslatorCLI:
 
                 stream = self.llm.create_chat_completion(
                     messages=messages,
-                    temperature=0.1,
-                    repeat_penalty=1.08,
-                    max_tokens=4096,
+                    temperature=temperature,
+                    repeat_penalty=repeat_penalty,
+                    max_tokens=max_tokens,
                     stream=True
                 )
 
@@ -582,7 +625,7 @@ class TranslatorCLI:
                 except Exception:
                     pass
 
-            console.print(f"[dim]耗时: {elapsed:.2f}s{clipboard_info} | (闲置 1 分钟后将自动释放内存)[/]\n")
+            console.print(f"[dim]耗时: {elapsed:.2f}s{clipboard_info} | (闲置 {self.idle_timeout} 秒后将自动释放内存)[/]\n")
 
         except Exception as e:
             console.print(f"\n[bold red]❌ 翻译出错: {str(e)}[/]\n")
@@ -603,7 +646,7 @@ class TranslatorCLI:
 
         while True:
             try:
-                tag = f"auto➔{self.target_lang_item[2]}"
+                tag = f"auto➔{self.target_lang_item['code']}"
                 prompt_text = HTML(f"<prompt>[{tag}] &gt; </prompt>")
                 user_input = self.session.prompt(prompt_text, style=prompt_style).strip()
 
