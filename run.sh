@@ -1,5 +1,13 @@
 #!/bin/bash
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+    LINK_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    if [[ "$SOURCE" != /* ]]; then
+        SOURCE="$LINK_DIR/$SOURCE"
+    fi
+done
+DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 cd "$DIR"
 
 # 优先使用项目独立虚拟环境

@@ -44,19 +44,54 @@ if [ "$CLEAN_MODE" = true ]; then
     echo -e "${GREEN}✓ 历史残留清理完毕，即将开始全新纯净安装。${NC}\n"
 fi
 
-# 1. 网络探测
+# 1. 下载源选择与网络探测
 detect_network_region() {
-    echo -e "${CYAN}[1/6] 正在探测网络环境与测速...${NC}"
-    
+    local source="${AI_TRANSLATOR_NETWORK_SOURCE:-}"
+
+    # 不使用调用终端遗留的本地代理设置；仅影响当前安装进程。
+    unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+
+    if [ -z "$source" ] && [ -t 0 ]; then
+        echo -e "${CYAN}[1/6] 请选择模型与 Python 依赖下载源：${NC}"
+        echo "  1) 国际直连（Hugging Face + 官方 PyPI）"
+        echo "  2) 国内镜像（HF-Mirror + 阿里云 PyPI）"
+        echo "  3) 自动检测（默认）"
+        read -r -p "输入编号 [3]: " source || source="auto"
+    fi
+    source=${source:-auto}
+
+    case "$source" in
+        1|international)
+            IS_CN=false
+            PIP_INDEX=""
+            MODEL_HOST="https://huggingface.co"
+            echo -e "网络节点: ${GREEN}国际直连 (Hugging Face & PyPI)${NC}\n"
+            return
+            ;;
+        2|domestic)
+            IS_CN=true
+            PIP_INDEX="-i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com"
+            MODEL_HOST="https://hf-mirror.com"
+            echo -e "网络节点: ${YELLOW}国内镜像 (HF-Mirror + 阿里云 PyPI)${NC}\n"
+            return
+            ;;
+        3|auto)
+            echo -e "${CYAN}[1/6] 正在自动探测网络环境...${NC}"
+            ;;
+        *)
+            echo -e "${YELLOW}未知下载源选项 '$source'，将自动检测。${NC}"
+            ;;
+    esac
+
     if curl -sI --connect-timeout 2 "https://huggingface.co" >/dev/null 2>&1; then
         IS_CN=false
         PIP_INDEX=""
-        MODEL_BASE_URL="https://huggingface.co/Qwen"
+        MODEL_HOST="https://huggingface.co"
         echo -e "网络节点: ${GREEN}国际网络 (直连 HuggingFace & PyPI)${NC}\n"
     else
         IS_CN=true
         PIP_INDEX="-i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com"
-        MODEL_BASE_URL="https://hf-mirror.com/Qwen"
+        MODEL_HOST="https://hf-mirror.com"
         echo -e "网络节点: ${YELLOW}国内网络 (自动启用 阿里云 PyPI 镜像 + HF-Mirror 模型高速节点)${NC}\n"
     fi
 }
@@ -80,21 +115,33 @@ install_system_dependencies() {
             tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng tesseract-ocr-jpn \
             tesseract-ocr-kor tesseract-ocr-rus tesseract-ocr-deu tesseract-ocr-fra \
             tesseract-ocr-spa tesseract-ocr-ita \
-            xclip wl-clipboard whiptail curl 2>/dev/null || true
+            xclip wl-clipboard curl 2>/dev/null || true
     elif which dnf >/dev/null 2>&1; then
         $SUDO_CMD dnf install -y \
             python3 python3-pip python3-devel gcc-c++ cmake \
             tesseract tesseract-langpack-chi_sim tesseract-langpack-jpn tesseract-langpack-kor \
             tesseract-langpack-rus tesseract-langpack-deu tesseract-langpack-fra tesseract-langpack-spa tesseract-langpack-ita \
-            xclip wl-clipboard newt curl || true
+            xclip wl-clipboard curl || true
     elif which pacman >/dev/null 2>&1; then
         $SUDO_CMD pacman -Sy --noconfirm \
             python python-pip python-virtualenv base-devel cmake \
             tesseract tesseract-data-chi_sim tesseract-data-jpn tesseract-data-kor \
             tesseract-data-rus tesseract-data-deu tesseract-data-fra tesseract-data-spa tesseract-data-ita \
-            xclip wl-clipboard libnewt curl || true
+            xclip wl-clipboard curl || true
     elif [[ "$OSTYPE" == "darwin"* ]] && which brew >/dev/null 2>&1; then
-        brew install python cmake tesseract tesseract-lang || true
+        # Homebrew 在 install 前会拉取软件索引；先做本地检测，避免每次安装器运行都下载索引。
+        MISSING_BREW_PACKAGES=()
+        command -v python3 >/dev/null 2>&1 || MISSING_BREW_PACKAGES+=(python)
+        command -v cmake >/dev/null 2>&1 || MISSING_BREW_PACKAGES+=(cmake)
+        command -v tesseract >/dev/null 2>&1 || MISSING_BREW_PACKAGES+=(tesseract)
+        brew list --versions tesseract-lang >/dev/null 2>&1 || MISSING_BREW_PACKAGES+=(tesseract-lang)
+
+        if [ "${#MISSING_BREW_PACKAGES[@]}" -gt 0 ]; then
+            echo -e "${YELLOW}缺少 macOS 依赖，正在通过 Homebrew 安装: ${MISSING_BREW_PACKAGES[*]}${NC}"
+            brew install "${MISSING_BREW_PACKAGES[@]}" || true
+        else
+            echo -e "${GREEN}✓ macOS 系统依赖已存在，跳过 Homebrew 下载。${NC}"
+        fi
     fi
     echo -e "${GREEN}✓ 系统依赖检查完成${NC}\n"
 }
@@ -144,20 +191,60 @@ select_and_download_models() {
     fi
 
     SELECTED_MODELS=""
-    if which whiptail >/dev/null 2>&1; then
-        SELECTED_MODELS=$(whiptail --title "AI Translator - 推荐模型下载选择" \
-            --checklist "请按 [空格键] 勾选要下载的模型，按 [Tab] 移动至 OK 回车确认：\n(亦可稍后自行下载任意 GGUF 模型放入 models/ 目录)\n" \
-            17 78 3 \
-            "3B" "Qwen2.5-3B-Instruct (2.0GB) [推荐·高精度·强逻辑]" ON \
-            "1.5B" "Qwen2.5-1.5B-Instruct (1.1GB) [极速·轻量·低内存]" OFF \
-            "7B" "Qwen2.5-7B-Instruct (4.7GB) [旗舰·出版级文采]" OFF \
-            3>&1 1>&2 2>&3 || true)
-    fi
+    prompt_for_models() {
+        local choice selections item selected="" invalid=false
 
-    if [ -z "$SELECTED_MODELS" ]; then
-        echo -e "${YELLOW}未通过界面选择，默认下载推荐的 Qwen2.5-3B 高精度模型。${NC}"
+        echo "请选择要下载的模型（可用逗号多选，例如 1,4；直接回车默认 1）："
+        echo "  1) Qwen2.5-3B-Instruct   (约 2.0GB，推荐·高精度)"
+        echo "  2) Qwen2.5-1.5B-Instruct (约 1.1GB，极速·轻量)"
+        echo "  3) Qwen2.5-7B-Instruct   (约 4.7GB，旗舰·高质量)"
+        echo "  4) Tencent Hy-MT2-1.8B   (翻译专用，Q4_K_M)"
+        read -r -p "输入编号 [1]: " choice
+        choice=${choice:-1}
+        choice=${choice//，/,}
+        choice=${choice//[[:space:]]/}
+        IFS=',' read -r -a selections <<< "$choice"
+
+        for item in "${selections[@]}"; do
+            case "$item" in
+                1) selected+='"3B" ' ;;
+                2) selected+='"1.5B" ' ;;
+                3) selected+='"7B" ' ;;
+                4) selected+='"HYMT" ' ;;
+                *) invalid=true ;;
+            esac
+        done
+
+        if [ "$invalid" = true ] || [ -z "$selected" ]; then
+            return 1
+        fi
+        SELECTED_MODELS="$selected"
+    }
+
+    if [ -t 0 ]; then
+        until prompt_for_models; do
+            echo -e "${YELLOW}输入无效，请输入菜单中的编号，例如 1 或 1,4。${NC}"
+        done
+    else
+        echo -e "${YELLOW}未检测到可交互终端，默认下载推荐的 Qwen2.5-3B 高精度模型。${NC}"
         SELECTED_MODELS='"3B"'
     fi
+
+    DOWNLOAD_MODE="${AI_TRANSLATOR_DOWNLOAD_MODE:-}"
+    if [ -z "$DOWNLOAD_MODE" ] && [ -t 0 ]; then
+        echo "请选择下载方式："
+        echo "  1) 由安装器下载（默认，支持断点续传）"
+        echo "  2) 仅显示下载链接（使用浏览器或下载器自行下载）"
+        read -r -p "输入编号 [1]: " DOWNLOAD_MODE || DOWNLOAD_MODE="auto"
+    fi
+    case "${DOWNLOAD_MODE:-auto}" in
+        1|auto|download) DOWNLOAD_MODE="auto" ;;
+        2|manual|links) DOWNLOAD_MODE="manual" ;;
+        *)
+            echo -e "${YELLOW}未知下载方式，默认由安装器下载。${NC}"
+            DOWNLOAD_MODE="auto"
+            ;;
+    esac
 
     download_model_file() {
         local name="$1"
@@ -175,12 +262,37 @@ select_and_download_models() {
         fi
 
         echo -e "${CYAN}正在检查/下载 $name -> models/$filename ...${NC}"
+        echo "  下载链接：$url"
+        echo "  手动续传：env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy curl -L -C - -o \"$target\" \"$url\""
         
-        python3 -c "
-import requests, os, time, sys
+        .venv/bin/python3 -c "
+import requests, json, os, time, sys
 
 url = '$url'
 target = '$target'
+model_host = '$MODEL_HOST'
+metadata_path = target + '.download-meta.json'
+
+def read_metadata():
+    try:
+        with open(metadata_path, encoding='utf-8') as metadata_file:
+            return json.load(metadata_file)
+    except (OSError, ValueError):
+        return None
+
+def write_metadata(etag):
+    temporary_path = metadata_path + '.tmp'
+    with open(temporary_path, 'w', encoding='utf-8') as metadata_file:
+        json.dump({'model_host': model_host, 'etag': etag}, metadata_file)
+    os.replace(temporary_path, metadata_path)
+
+def discard_partial(reason):
+    print(f'  ⚠️ {reason}，将按当前下载节点重新开始。')
+    for path in (target, metadata_path):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
 
 while True:
     existing_size = os.path.getsize(target) if os.path.exists(target) else 0
@@ -189,8 +301,25 @@ while True:
         r = requests.get(url, headers=headers, stream=True, timeout=20)
         if r.status_code == 416:
             print(f'  ✓ 模型文件已完整存在 ({existing_size/(1024*1024):.1f} MB)，跳过下载。')
+            try:
+                os.remove(metadata_path)
+            except FileNotFoundError:
+                pass
             break
         r.raise_for_status()
+        metadata = read_metadata() if existing_size > 0 else None
+        remote_etag = r.headers.get('etag')
+
+        if existing_size > 0:
+            if (not metadata or not metadata.get('etag') or not remote_etag
+                    or metadata.get('etag') != remote_etag or r.status_code != 206):
+                r.close()
+                discard_partial('远端模型已变化或来源无法验证')
+                continue
+            if metadata.get('model_host') != model_host:
+                print('  ⚡ 已确认远端模型未变化，跨下载节点断点续传...')
+
+        write_metadata(remote_etag)
         content_range = r.headers.get('content-range', '')
         total_size = int(content_range.split('/')[-1]) if content_range else int(r.headers.get('content-length', 0)) + existing_size
         
@@ -209,6 +338,10 @@ while True:
                     print(f'\r  Progress: {pct:.1f}% ({existing_size/(1024*1024):.1f}/{total_size/(1024*1024):.1f} MB)', end='', flush=True)
         if total_size and existing_size >= total_size:
             print('\n  Done!')
+            try:
+                os.remove(metadata_path)
+            except FileNotFoundError:
+                pass
             break
     except Exception as e:
         print(f'\n  连接重试中 (2秒后恢复断点续传: {e})...')
@@ -216,14 +349,46 @@ while True:
 "
     }
 
+    show_manual_download() {
+        local name="$1"
+        local filename="$2"
+        local url="$3"
+        local target="$PROJECT_DIR/models/$filename"
+
+        echo -e "${CYAN}$name${NC}"
+        echo "  下载链接：$url"
+        echo "  保存位置：$target"
+        echo "  断点续传命令：env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy curl -L -C - -o \"$target\" \"$url\""
+    }
+
+    if [ "$DOWNLOAD_MODE" = "manual" ]; then
+        echo -e "${YELLOW}仅显示下载链接，未开始自动下载。下载完成后将 .gguf 文件放入 models/ 即可。${NC}"
+        if [[ "$SELECTED_MODELS" =~ "3B" ]]; then
+            show_manual_download "Qwen2.5-3B" "qwen2.5-3b-instruct-q4_k_m.gguf" "$MODEL_HOST/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
+        fi
+        if [[ "$SELECTED_MODELS" =~ "1.5B" ]]; then
+            show_manual_download "Qwen2.5-1.5B" "qwen2.5-1.5b-instruct-q4_k_m.gguf" "$MODEL_HOST/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+        fi
+        if [[ "$SELECTED_MODELS" =~ "7B" ]]; then
+            show_manual_download "Qwen2.5-7B" "qwen2.5-7b-instruct-q4_k_m.gguf" "$MODEL_HOST/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf"
+        fi
+        if [[ "$SELECTED_MODELS" =~ "HYMT" ]]; then
+            show_manual_download "Tencent Hy-MT2-1.8B" "Hy-MT2-1.8B-Q4_K_M.gguf" "$MODEL_HOST/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf"
+        fi
+        return
+    fi
+
     if [[ "$SELECTED_MODELS" =~ "3B" ]]; then
-        download_model_file "Qwen2.5-3B" "qwen2.5-3b-instruct-q4_k_m.gguf" "$MODEL_BASE_URL/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
+        download_model_file "Qwen2.5-3B" "qwen2.5-3b-instruct-q4_k_m.gguf" "$MODEL_HOST/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
     fi
     if [[ "$SELECTED_MODELS" =~ "1.5B" ]]; then
-        download_model_file "Qwen2.5-1.5B" "qwen2.5-1.5b-instruct-q4_k_m.gguf" "$MODEL_BASE_URL/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+        download_model_file "Qwen2.5-1.5B" "qwen2.5-1.5b-instruct-q4_k_m.gguf" "$MODEL_HOST/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
     fi
     if [[ "$SELECTED_MODELS" =~ "7B" ]]; then
-        download_model_file "Qwen2.5-7B" "qwen2.5-7b-instruct-q4_k_m.gguf" "$MODEL_BASE_URL/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf"
+        download_model_file "Qwen2.5-7B" "qwen2.5-7b-instruct-q4_k_m.gguf" "$MODEL_HOST/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf"
+    fi
+    if [[ "$SELECTED_MODELS" =~ "HYMT" ]]; then
+        download_model_file "Tencent Hy-MT2-1.8B" "Hy-MT2-1.8B-Q4_K_M.gguf" "$MODEL_HOST/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf"
     fi
 
     if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
@@ -287,14 +452,50 @@ configure_launchers() {
 
     if [[ "$CREATE_DESKTOP" =~ ^[Yy]$ ]]; then
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            cat << 'MAC_EOF' > "$DESKTOP_PATH/AI-Translator.command"
+            APP_PATH="$DESKTOP_PATH/AI Translator.app"
+            APP_CONTENTS="$APP_PATH/Contents"
+            APP_MACOS="$APP_CONTENTS/MacOS"
+            APP_RESOURCES="$APP_PATH/Contents/Resources"
+            ICON_PATH="$PROJECT_DIR/assets/icons/AI-Translator.icns"
+            mkdir -p "$APP_MACOS" "$APP_RESOURCES"
+            cat <<'MAC_PLIST_EOF' > "$APP_CONTENTS/Info.plist"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>AI Translator</string>
+    <key>CFBundleIconFile</key>
+    <string>AI-Translator.icns</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.local.ai-translator</string>
+    <key>CFBundleName</key>
+    <string>AI Translator</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+</dict>
+</plist>
+MAC_PLIST_EOF
+            cat << MAC_EOF > "$APP_MACOS/AI Translator"
 #!/bin/bash
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-/bin/bash "$PROJECT_DIR/run.sh"
+# 此项目是终端交互程序；Finder 启动 .app 时不会自动创建终端窗口。
+exec /usr/bin/open -a Terminal "$PROJECT_DIR/run.sh"
 MAC_EOF
-            chmod +x "$DESKTOP_PATH/AI-Translator.command"
-            chown "$REAL_USER" "$DESKTOP_PATH/AI-Translator.command" 2>/dev/null || true
-            echo -e "${GREEN}✓ 已在 macOS 桌面创建 AI-Translator.command${NC}"
+            chmod +x "$APP_MACOS/AI Translator"
+            if [ -f "$ICON_PATH" ]; then
+                cp "$ICON_PATH" "$APP_RESOURCES/AI-Translator.icns"
+            else
+                echo -e "${YELLOW}⚠ 未找到应用图标: $ICON_PATH${NC}"
+            fi
+            chown -R "$REAL_USER":"$REAL_USER" "$APP_PATH" 2>/dev/null || true
+            touch "$APP_PATH"
+            echo -e "${GREEN}✓ 已在 macOS 桌面创建 AI Translator.app（原 AI-Translator.command 保留为备用）${NC}"
         elif grep -qi microsoft /proc/version 2>/dev/null; then
             cat << WIN_EOF > "$DESKTOP_PATH/AI-Translator.bat"
 @echo off
@@ -308,9 +509,9 @@ Version=1.0
 Type=Application
 Name=AI 终端翻译器
 Comment=Universal Local AI Translator powered by GGUF
-Exec=gnome-terminal --title="AI 终端翻译器" -- bash -c "$PROJECT_DIR/run.sh; exec bash"
-Icon=accessories-dictionary
-Terminal=false
+Exec="$PROJECT_DIR/run.sh"
+Icon=$PROJECT_DIR/assets/icons/AI-Translator.png
+Terminal=true
 Categories=Utility;Translation;Development;
 LINUX_EOF
             chmod +x "$DESKTOP_PATH/AI-Translator.desktop"

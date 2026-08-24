@@ -377,6 +377,8 @@ class TranslatorCLI:
         self.models_map = {}
         idx = 1
         for fpath in gguf_files:
+            if os.path.exists(f'{fpath}.download-meta.json'):
+                continue
             fname = os.path.basename(fpath)
             fsize_gb = os.path.getsize(fpath) / (1024 * 1024 * 1024)
             display_name = f"{format_model_name(fname)} [{fsize_gb:.1f}GB]"
