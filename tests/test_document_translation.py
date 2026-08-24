@@ -46,6 +46,12 @@ class DocumentTerminologyTests(unittest.TestCase):
             ("Scott Bessent", "Financial Times", "Bessent", "Reuters", "BST"),
         )
 
+    def test_extracts_capitalized_terms_with_lowercase_connectors(self):
+        self.assertEqual(
+            extract_term_candidates("The Strait of Hormuz is strategically vital."),
+            ("Strait of Hormuz",),
+        )
+
     def test_curated_terms_override_model_and_malformed_values_are_dropped(self):
         response = '```json\n{"Bessent":"贝森特","Reuters":"路透通讯"}\n```'
         glossary = parse_glossary_response(

@@ -12,7 +12,7 @@ _SENTENCE_STARTERS = {
     "A", "An", "The", "One", "He", "She", "It", "They", "This", "That",
 }
 _CAPITALIZED_TERM_RE = re.compile(
-    r"\b(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z]+|[A-Z]{2,}))*\b"
+    r"\b(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:(?:[a-z]+)\s+)?(?:[A-Z][a-z]+|[A-Z]{2,}))*\b"
 )
 _FENCED_JSON_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL)
 
