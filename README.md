@@ -21,7 +21,7 @@
 - 💤 **1-Minute Auto-Sleep (0 MB Footprint)**: Automatically unloads model weights after 60 seconds of inactivity to keep your system memory clean (0 MB RAM). Instantly wakes up in ~0.3s on new input, with active-lock protection during long text translations.
 - 📋 **Auto Clipboard Sync**: Translations are automatically synced to the system clipboard upon completion.
 - 🧼 **Clean Output**: Borderless horizontal rule dividers—no side pipe `│` characters. Copy text cleanly without formatting artifacts.
-- 🚀 **One-Click Automated Installer**: Includes TUI model multi-selection, domestic/global mirror routing, anti-sudo permission isolation, and cross-platform desktop integration.
+- 🚀 **One-Click Automated Installer & Uninstaller**: Includes TUI model multi-selection, domestic/global mirror routing, anti-sudo permission isolation, and clean uninstallation.
 
 ---
 
@@ -45,6 +45,15 @@ chmod +x install.sh
 > 4. Launches an interactive TUI checklist for model selection (`[Space]` to select, `[Enter]` to confirm).
 > 5. Detects your OS desktop directory (`~/Desktop`, `~/桌面`, Windows WSL desktop) and creates double-clickable launchers.
 > 6. Optionally adds `qwen-trans` to your system terminal `$PATH`.
+
+### 2. Clean Uninstallation
+
+To remove desktop shortcuts, global commands, and virtual environments:
+
+```bash
+chmod +x uninstall.sh
+./uninstall.sh
+```
 
 ---
 
@@ -132,7 +141,9 @@ You can edit any `.md` file in `skills/` directly with your preferred editor. Ch
 ```text
 ai-translator/
 ├── install.sh              # Cross-platform automated installer
+├── uninstall.sh            # Clean uninstaller (removes shortcuts, venv, cache)
 ├── run.sh                  # Application launcher (.venv aware)
+├── run.bat                 # Windows native launcher
 ├── requirements.txt        # Python dependency manifest
 ├── translator_cli.py       # Core CLI application
 ├── models/                 # Model storage (.gguf files, ignored by git)
