@@ -3,8 +3,8 @@
 """
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
-Architecture: Dynamic Multi-Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: 24 Specialized Linguistic Skills, Paragraph-Level Dynamic Routing, Robust Anti-Leakage
+Architecture: Fast Multi-Language Sniffer + Modular File-based Skill Routing (skills/*.md)
+Features: 24 Specialized Linguistic Skills, Regex Paragraph Chunker, Native Script Anchoring
 """
 
 import os
@@ -40,17 +40,20 @@ USER_CONFIG_DIR = os.path.expanduser("~/.config/ai-translator") if os.name != 'n
 USER_CONFIG_FILE = os.path.join(USER_CONFIG_DIR, "config.json")
 LOCAL_CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
+# 9 大支持语种定义（含原生文字与英文名映射）
 LANGUAGES = {
-    "1": {"zh": "中文", "en": "Simplified Chinese", "code": "zh", "flag": "🇨🇳", "ocr": "chi_sim"},
+    "1": {"zh": "中文", "en": "Simplified Chinese (简体中文)", "code": "zh", "flag": "🇨🇳", "ocr": "chi_sim"},
     "2": {"zh": "英语", "en": "English", "code": "en", "flag": "🇬🇧", "ocr": "eng"},
-    "3": {"zh": "日语", "en": "Japanese", "code": "ja", "flag": "🇯🇵", "ocr": "jpn"},
-    "4": {"zh": "韩语", "en": "Korean", "code": "ko", "flag": "🇰🇷", "ocr": "kor"},
-    "5": {"zh": "德语", "en": "German", "code": "de", "flag": "🇩🇪", "ocr": "deu"},
-    "6": {"zh": "法语", "en": "French", "code": "fr", "flag": "🇫🇷", "ocr": "fra"},
-    "7": {"zh": "西班牙语", "en": "Spanish", "code": "es", "flag": "🇪🇸", "ocr": "spa"},
-    "8": {"zh": "俄语", "en": "Russian", "code": "ru", "flag": "🇷🇺", "ocr": "rus"},
-    "9": {"zh": "意大利语", "en": "Italian", "code": "it", "flag": "🇮🇹", "ocr": "ita"},
+    "3": {"zh": "日语", "en": "Japanese (日本語)", "code": "ja", "flag": "🇯🇵", "ocr": "jpn"},
+    "4": {"zh": "韩语", "en": "Korean (한국어)", "code": "ko", "flag": "🇰🇷", "ocr": "kor"},
+    "5": {"zh": "德语", "en": "German (Deutsch)", "code": "de", "flag": "🇩🇪", "ocr": "deu"},
+    "6": {"zh": "法语", "en": "French (Français)", "code": "fr", "flag": "🇫🇷", "ocr": "fra"},
+    "7": {"zh": "西班牙语", "en": "Spanish (Español)", "code": "es", "flag": "🇪🇸", "ocr": "spa"},
+    "8": {"zh": "俄语", "en": "Russian (Русский язык)", "code": "ru", "flag": "🇷🇺", "ocr": "rus"},
+    "9": {"zh": "意大利语", "en": "Italian (Italiano)", "code": "it", "flag": "🇮🇹", "ocr": "ita"},
 }
+
+CODE_TO_LANG = {v["code"]: v for v in LANGUAGES.values()}
 
 LATIN_STOPWORDS = {
     "en": {"the", "is", "this", "that", "are", "was", "were", "for", "with", "have", "has", "not", "you", "all", "any", "can", "will", "an", "a", "in", "on", "at", "to", "from", "by", "about", "as", "into", "like", "through", "after", "over", "between", "out", "against", "during", "without", "before", "under", "around", "among", "people", "often", "believe", "when", "more", "less"},
@@ -86,24 +89,24 @@ def detect_language(text: str):
     """通过字符集 + 词频投票高效嗅探源语言 (Python 确定性路由层)"""
     # 1. 独立字符集特征 (日、韩、俄、中)
     if re.search(r'[\u3040-\u309F\u30A0-\u30FF]', text):
-        return "ja", "Japanese"
+        return "ja", CODE_TO_LANG["ja"]["en"]
     if re.search(r'[\uAC00-\uD7AF\u1100-\u11FF]', text):
-        return "ko", "Korean"
+        return "ko", CODE_TO_LANG["ko"]["en"]
     if re.search(r'[\u0400-\u04FF]', text):
-        return "ru", "Russian"
+        return "ru", CODE_TO_LANG["ru"]["en"]
     
     chinese_chars = len(re.findall(r'[\u4E00-\u9FFF]', text))
     total_alpha = len(re.findall(r'[a-zA-Z]', text))
     if chinese_chars > 0 and chinese_chars >= total_alpha * 0.3:
-        return "zh", "Simplified Chinese"
+        return "zh", CODE_TO_LANG["zh"]["en"]
     
     # 2. 特殊变音/符号特征
     if re.search(r'[äöüßÄÖÜ]', text):
-        return "de", "German"
+        return "de", CODE_TO_LANG["de"]["en"]
     if re.search(r'[¿¡ñÑ]', text):
-        return "es", "Spanish"
+        return "es", CODE_TO_LANG["es"]["en"]
     if re.search(r'[œŒçÇ]', text):
-        return "fr", "French"
+        return "fr", CODE_TO_LANG["fr"]["en"]
 
     # 3. 欧语停用词词频投票 (英、德、法、西、意)
     words = [w.lower() for w in re.findall(r'[a-zA-Zà-öø-ÿÀ-ÖØ-ß\']+', text)]
@@ -115,10 +118,9 @@ def detect_language(text: str):
                     scores[lang] += 1
         best_lang = max(scores, key=scores.get)
         if scores[best_lang] > 0:
-            lang_names = {"en": "English", "de": "German", "fr": "French", "es": "Spanish", "it": "Italian"}
-            return best_lang, lang_names[best_lang]
+            return best_lang, CODE_TO_LANG[best_lang]["en"]
 
-    return "en", "English"
+    return "en", CODE_TO_LANG["en"]["en"]
 
 def grab_clipboard_image():
     """检测并提取剪贴板中的图片保存为跨平台安全临时文件"""
@@ -447,7 +449,7 @@ class TranslatorCLI:
     @property
     def target_lang_display(self):
         item = self.target_lang_item
-        return f"{item['flag']} {item['zh']} ({item['en']})"
+        return f"{item['flag']} {item['zh']} ({item['code']})"
 
     def print_header(self):
         model_name = self.get_current_model_name()
@@ -470,20 +472,20 @@ class TranslatorCLI:
         target_code = self.target_lang_item["code"]
         target_name = self.target_lang_item["en"]
         
-        # 确定性双向互翻：当源语言与目标语言一致时，若目标为中文则翻为英文，否则翻为中文
+        # 确定性双向互翻
         if source_code == target_code:
             if target_code == "zh":
                 target_code = "en"
-                target_name = "English"
+                target_name = CODE_TO_LANG["en"]["en"]
             else:
                 target_code = "zh"
-                target_name = "Simplified Chinese"
+                target_name = CODE_TO_LANG["zh"]["en"]
         
         base_template = load_skill("base")
         if not base_template:
-            base_template = "You are a professional translator.\nDIRECTION: {source_name} → {target_name}\nTranslate the input completely and naturally into {target_name}."
+            base_template = "You are a professional {source_name}-to-{target_name} translator.\nTASK: Translate the user's input text into {target_name}."
         
-        # 显式注入确定性的 DIRECTION
+        # 显式注入确定性的源语言与目标语言（含原生脚本提示）
         base_prompt = base_template.replace("{source_name}", source_name).replace("{target_name}", target_name)
         
         # 拼接专属专项 Skill
@@ -600,7 +602,7 @@ class TranslatorCLI:
 
             _, first_source, first_target = self.build_dynamic_prompt(paragraphs[0])
             console.print()
-            console.rule(f"[bold green]Translation ➔ {first_target}[/]", style="green")
+            console.rule(f"[bold green]Translation ➔ {self.target_lang_display}[/]", style="green")
 
             for i, p in enumerate(paragraphs):
                 if not p:
