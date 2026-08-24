@@ -52,6 +52,12 @@ class DocumentTerminologyTests(unittest.TestCase):
             ("Strait of Hormuz",),
         )
 
+    def test_sentence_starter_does_not_absorb_following_lowercase_words(self):
+        self.assertEqual(
+            extract_term_candidates("He said London was important."),
+            ("London",),
+        )
+
     def test_curated_terms_override_model_and_malformed_values_are_dropped(self):
         response = '```json\n{"Bessent":"贝森特","Reuters":"路透通讯"}\n```'
         glossary = parse_glossary_response(
