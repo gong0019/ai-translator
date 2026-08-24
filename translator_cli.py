@@ -27,6 +27,14 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
 from prompt_toolkit.key_binding import KeyBindings
 from llama_cpp import Llama
+from document_translation import (
+    extract_term_candidates,
+    format_glossary,
+    load_curated_terms,
+    looks_likely_truncated,
+    parse_glossary_response,
+    plan_paragraph_chunks,
+)
 from translation_quality import (
     CompletionResult,
     normalize_quality_settings,
@@ -38,6 +46,7 @@ console = Console()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILLS_DIR = os.path.join(BASE_DIR, "skills")
+NEWS_TERMS_FILE = os.path.join(SKILLS_DIR, "news_terms.json")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 TEMP_DIR = tempfile.gettempdir()
 CLIPBOARD_OCR_PATH = os.path.join(TEMP_DIR, "ai_translator_clipboard_ocr.png")
@@ -490,7 +499,7 @@ class TranslatorCLI:
             border_style="bright_blue"
         ))
 
-    def build_dynamic_prompt(self, text: str):
+    def _resolve_translation_route(self, text: str):
         source_code, source_name = detect_language(text)
         target_code = self.target_lang_item["code"]
         target_name = self.target_lang_item["en"]
@@ -513,6 +522,13 @@ class TranslatorCLI:
             else:
                 target_code = "zh"
                 target_name = CODE_TO_LANG["zh"]["en"]
+
+        if pair_key is None:
+            pair_key = f"{source_code}_to_{target_code}"
+        return source_name, target_name, target_code, pair_key
+
+    def build_dynamic_prompt(self, text: str, glossary=None):
+        source_name, target_name, _, pair_key = self._resolve_translation_route(text)
         
         base_template = load_skill("base")
         if not base_template:
@@ -521,8 +537,6 @@ class TranslatorCLI:
         base_prompt = base_template.replace("{source_name}", source_name).replace("{target_name}", target_name)
         
         # 拼接专属专项 Skill
-        if pair_key is None:
-            pair_key = f"{source_code}_to_{target_code}"
         skill_prompt = load_skill(pair_key)
         
         if skill_prompt:
@@ -530,7 +544,60 @@ class TranslatorCLI:
         else:
             final_prompt = base_prompt
 
+        glossary_prompt = format_glossary(glossary or {})
+        if glossary_prompt:
+            final_prompt = f"{final_prompt}\n\n{glossary_prompt}"
+
         return final_prompt, source_name, target_name
+
+    def _count_tokens(self, text: str) -> int:
+        tokenize = getattr(self.llm, "tokenize", None)
+        if callable(tokenize):
+            try:
+                return len(tokenize(text.encode("utf-8"), add_bos=False))
+            except Exception:
+                pass
+        return max(1, len(re.findall(r"\w+|[^\w\s]", text, re.UNICODE)))
+
+    def _build_document_glossary(self, text: str, pair_key: str):
+        candidates = extract_term_candidates(text)
+        if not candidates:
+            return {}
+        try:
+            curated = load_curated_terms(NEWS_TERMS_FILE, pair_key)
+        except (OSError, ValueError, json.JSONDecodeError):
+            curated = {}
+
+        curated_only = parse_glossary_response("{}", candidates, curated)
+        unknown = tuple(term for term in candidates if term not in curated_only)
+        if not unknown:
+            return curated_only
+
+        request = (
+            "Return one JSON object mapping every supplied source term to its "
+            "standard target-language news rendering. Keep the keys exactly unchanged. "
+            "Return JSON only.\n\nSOURCE TERMS:\n"
+            + json.dumps(unknown, ensure_ascii=False)
+        )
+        try:
+            result = self._collect_completion(
+                [{"role": "user", "content": request}],
+                0.0,
+                float(self.config.get("repeat_penalty", 1.08)),
+                min(1024, int(self.config.get("max_tokens", 4096))),
+            )
+            return parse_glossary_response(result.text, candidates, curated)
+        except Exception:
+            return curated_only
+
+    def _confirm_truncated_input(self) -> bool:
+        try:
+            answer = input(
+                "\n检测到输入末尾可能被截断，继续翻译可能产生错误。仍要继续？[y/N]: "
+            ).strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            return False
+        return answer in {"y", "yes"}
 
     def switch_model(self):
         self.refresh_available_models()
@@ -638,6 +705,13 @@ class TranslatorCLI:
         )
 
     def stream_translate(self, text: str):
+        normalized_text = normalize_source_structure(text)
+        source_code, _ = detect_language(normalized_text)
+        if looks_likely_truncated(normalized_text, source_code):
+            if not self._confirm_truncated_input():
+                console.print("[yellow]输入末尾疑似不完整，已取消翻译。[/]")
+                return
+
         self.ensure_engine()
         with self.lock:
             self.is_busy = True
@@ -653,64 +727,54 @@ class TranslatorCLI:
         )
 
         try:
-            normalized_text = normalize_source_structure(text)
-            raw_paragraphs = re.split(r'\n\s*\n', normalized_text)
-            paragraphs = [p.strip() for p in raw_paragraphs if p.strip()]
-
-            if not paragraphs:
-                paragraphs = [normalized_text.strip()]
+            _, _, resolved_target_code, pair_key = self._resolve_translation_route(
+                normalized_text
+            )
+            glossary = self._build_document_glossary(normalized_text, pair_key)
+            max_source_tokens = min(
+                3000,
+                max(256, int(self.config.get("n_ctx", 8192) * 0.4)),
+            )
+            chunks = plan_paragraph_chunks(
+                normalized_text,
+                self._count_tokens,
+                max_source_tokens,
+            )
+            review_notes = []
 
             console.print()
             console.rule(f"[bold green]Translation ➔ {self.target_lang_display}[/]", style="green")
 
-            for paragraph_index, paragraph in enumerate(paragraphs):
-                units = [line.strip() for line in paragraph.splitlines() if line.strip()]
-                for unit in units:
-                    system_prompt, _, resolved_target_name = self.build_dynamic_prompt(unit)
-                    resolved_target_code = next(
-                        (
-                            code
-                            for code, item in CODE_TO_LANG.items()
-                            if item["en"] == resolved_target_name
-                        ),
-                        self.target_lang_item["code"],
-                    )
-                    outcome = run_quality_checked_completion(
-                        source=unit,
-                        target_code=resolved_target_code,
-                        system_prompt=system_prompt,
-                        complete=lambda messages, attempt_temperature: self._collect_completion(
-                            messages,
-                            attempt_temperature,
-                            repeat_penalty,
-                            max_tokens,
-                        ),
-                        temperature=temperature,
-                        retry_limit=retry_limit,
-                        validation_enabled=validation_enabled,
-                    )
+            for chunk_index, chunk in enumerate(chunks):
+                system_prompt, _, _ = self.build_dynamic_prompt(chunk, glossary)
+                outcome = run_quality_checked_completion(
+                    source=chunk,
+                    target_code=resolved_target_code,
+                    system_prompt=system_prompt,
+                    complete=lambda messages, attempt_temperature: self._collect_completion(
+                        messages,
+                        attempt_temperature,
+                        repeat_penalty,
+                        max_tokens,
+                    ),
+                    temperature=temperature,
+                    retry_limit=retry_limit,
+                    validation_enabled=validation_enabled,
+                    glossary=glossary,
+                )
 
-                    if outcome.errors and outcome.errors != ("VALIDATOR_ERROR",):
-                        error_list = ", ".join(outcome.errors)
-                        console.print(
-                            "[bold red]❌ 翻译单元未通过质量校验，"
-                            f"未显示不合格译文: {error_list}[/]"
-                        )
-                        continue
+                sys.stdout.write(outcome.text)
+                if not outcome.text.endswith("\n"):
+                    sys.stdout.write("\n")
+                sys.stdout.flush()
+                review_notes.extend(outcome.review_notes)
 
-                    sys.stdout.write(outcome.text)
-                    if not outcome.text.endswith("\n"):
-                        sys.stdout.write("\n")
-                    sys.stdout.flush()
-                    if outcome.errors == ("VALIDATOR_ERROR",):
-                        console.print(
-                            "[bold yellow]⚠ 校验器执行失败，已保留模型输出: "
-                            "VALIDATOR_ERROR[/]"
-                        )
-
-                if paragraph_index < len(paragraphs) - 1:
+                if chunk_index < len(chunks) - 1:
                     sys.stdout.write("\n")
                     sys.stdout.flush()
+
+            for note in dict.fromkeys(review_notes):
+                console.print(f"[yellow]⚠ {note}[/]")
 
             console.rule("[dim green]END[/]", style="green")
 
