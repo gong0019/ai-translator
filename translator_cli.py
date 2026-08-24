@@ -4,7 +4,7 @@
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
 Architecture: Fast Multi-Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: 24 Specialized Linguistic Skills, Physical CPU Thread Optimizer, Regex Chunker
+Features: 25 Specialized Linguistic Skills, Chinglish/Mixed Text Auto-Purifier, Physical CPU Thread Optimizer
 """
 
 import os
@@ -105,8 +105,14 @@ def detect_language(text: str):
         return "ru", CODE_TO_LANG["ru"]["en"]
     
     chinese_chars = len(re.findall(r'[\u4E00-\u9FFF]', text))
-    total_alpha = len(re.findall(r'[a-zA-Z]', text))
-    if chinese_chars > 0 and chinese_chars >= total_alpha * 0.3:
+    eng_words = re.findall(r'[a-zA-Z]{2,}', text)
+    
+    # 检测中英夹杂（Chinglish）：既有汉字又有夹带英文单词
+    if chinese_chars > 0 and len(eng_words) > 0:
+        return "mixed", "Mixed / Chinglish"
+
+    # 纯中文
+    if chinese_chars > 0:
         return "zh", CODE_TO_LANG["zh"]["en"]
     
     # 2. 特殊变音/符号特征
@@ -481,8 +487,17 @@ class TranslatorCLI:
         source_code, source_name = detect_language(text)
         target_code = self.target_lang_item["code"]
         target_name = self.target_lang_item["en"]
+
+        # 处理中英混杂句（Chinglish 净化为纯中文）
+        if source_code == "mixed":
+            if target_code == "zh":
+                skill_prompt = load_skill("mixed_to_zh")
+                if skill_prompt:
+                    return skill_prompt, "Chinglish (中英夹杂)", "Simplified Chinese (简体中文)"
+            source_code = "zh"
+            source_name = CODE_TO_LANG["zh"]["en"]
         
-        # 确定性双向互翻
+        # 确定性双向互翻（纯中文输入且目标为中文时，自动翻译为英文）
         if source_code == target_code:
             if target_code == "zh":
                 target_code = "en"
