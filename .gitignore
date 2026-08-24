@@ -15,12 +15,17 @@ models/*.gguf
 models/*.bin
 models/*.safetensors
 models/*.pth
+models/*.download-meta.json
 !models/.gitkeep
 
 # Logs & Temporary Files
 *.log
 /tmp/
 .cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 *.tmp
 
 # IDEs & System Files

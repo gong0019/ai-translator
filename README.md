@@ -17,10 +17,10 @@
 
 - ⚡ **Local & Privacy-First**: 100% runs on your local CPU or GPU using optimized C++ inference (`llama.cpp`). Zero cloud API fees, zero data tracking.
 - 🧩 **Universal GGUF Engine**: Auto-discovers and hot-switches between **any GGUF model** (Qwen2.5, DeepSeek, Llama-3, Gemma-2, Mistral) simply by dropping them into `models/`.
-- 🧠 **Dynamic Skill-Based Routing**: Python detects source language instantly and dynamically injects specialized translation rules (e.g., Japanese negation protection, English clause de-inversion, Chinese subject recovery).
+- 🧠 **Document-Aware News Translation**: Uses compact language skills, a shared document glossary, paragraph-safe chunking, truncation confirmation, and targeted retry of only the defective chunk.
 - 📷 **Smart Screenshot OCR (`Ctrl+V`)**: Press `Ctrl+V` to automatically capture clipboard images, extract text via local Tesseract OCR while preserving spatial layouts, and translate line-by-line.
 - 💤 **1-Minute Auto-Sleep (0 MB Footprint)**: Automatically unloads model weights after 60 seconds of inactivity to keep your system memory clean (0 MB RAM). Instantly wakes up in ~0.3s on new input, with active-lock protection during long text translations.
-- 📋 **Auto Clipboard Sync**: Translations are automatically synced to the system clipboard upon completion.
+- 📋 **Clipboard-Friendly Input**: `Ctrl+V` pastes text normally or detects clipboard images for local OCR. Translation output is not copied automatically.
 - 🧼 **Clean Output**: Borderless horizontal rule dividers—no side pipe `│` characters. Copy text cleanly without formatting artifacts.
 - 🚀 **One-Click Automated Installer & Uninstaller**: Includes TUI model selection, domestic/global mirror routing, anti-sudo permission isolation, and clean uninstallation.
 
@@ -40,12 +40,15 @@ chmod +x install.sh
 ```
 
 > **What `install.sh` does automatically:**
-> 1. Detects network region and auto-switches between global PyPI/HuggingFace and domestic mirrors (Aliyun / HF-Mirror).
+> 1. Lets you choose **Global Direct**, **China Mirrors**, or **Auto Detect** for both Python packages and model downloads. Installer downloads ignore stale local proxy variables.
 > 2. Installs required system packages (`tesseract-ocr`, `cmake`, `xclip`/`wl-clipboard`).
 > 3. Sets up an isolated Python virtual environment (`.venv/`) with anti-sudo privilege separation.
-> 4. Launches an interactive TUI checklist for recommended model selection (`[Space]` to select, `[Enter]` to confirm).
-> 5. Detects your OS desktop directory (`~/Desktop`, `~/桌面`, Windows WSL desktop) and creates double-clickable launchers.
-> 6. Adds `ai-trans` (and `qwen-trans`) to your system terminal `$PATH`.
+> 4. Supports comma-separated multi-selection of Qwen2.5 1.5B/3B/7B and Tencent Hy-MT2-1.8B, with either resumable installer download or link-only manual download.
+> 5. Validates the selected source and remote file identity before resuming. If the source changes, stale partial data is discarded instead of being mixed with the new download.
+> 6. Creates a native macOS `.app` launcher with icon, a Linux `.desktop` launcher with icon, or the Windows/WSL launcher as appropriate.
+> 7. Adds `ai-trans` (and `qwen-trans`) to your system terminal `$PATH`.
+
+The selected source controls Python packages and model files. Homebrew, APT, DNF, and Pacman continue to use the repositories configured on the operating system; on macOS, Homebrew is not invoked when all required commands and language packs are already installed.
 
 ### 2. Clean Uninstallation
 
@@ -76,16 +79,16 @@ qwen-trans
 ╭───────────────────────────────────────────────────────────────────────╮
 │  🌐 AI Terminal Translator (Universal GGUF Engine)                    │
 │  Input: 🔍 Auto Language Sniffer ➔ Target: 🇨🇳 Simplified Chinese      │
-│  Model: Qwen2.5 3B (Q4_K_M) [2.0GB] | AutoSleep: 1m | AutoCopy: ON    │
+│  Model: Qwen2.5 3B (Q4_K_M) [2.0GB] | AutoSleep: 1m                   │
 ╰───────────────────────────────────────────────────────────────────────╯
-Shortcuts: Ctrl+V (Smart Image/Text Paste) | /lang | /model | /sleep | /copy | /quit
+Shortcuts: Ctrl+V (Smart Image/Text Paste) | /lang | /model | /sleep | /quit
 
 [auto➔zh] > Missing one day of practice is less discouraging when the goal is to continue over a long period rather than to perform perfectly every day.
 
 ──────────────────── Translation ➔ Simplified Chinese ────────────────────
 当目标是长期坚持而不是每天都完美表现时，一天不练习并不会让人感到那么沮丧。
 ─────────────────────────────────── END ──────────────────────────────────
-(Elapsed: 0.42s | Copied to clipboard 📋 | Auto-sleeps in 1 min)
+(Elapsed: 0.42s | Auto-sleeps in 1 min)
 ```
 
 ### Slash Commands
@@ -94,7 +97,7 @@ Shortcuts: Ctrl+V (Smart Image/Text Paste) | /lang | /model | /sleep | /copy | /
 | :--- | :--- |
 | **`Ctrl+V`** | **Smart Paste**: Automatically extracts image text via OCR if clipboard contains a screenshot; pastes text otherwise. |
 | **`/lang`** | Change target language (1: Chinese, 2: English, 3: Japanese, 4: Korean, 5: German, 6: French, etc.). |
-| **`/model`** | **Hot-switch Models**: Scans `models/` directory and lets you pick any installed GGUF model dynamically. |
+| **`/model`** | **Hot-switch Models**: Re-scans `models/` every time and lists all complete GGUF files. In-progress downloads are hidden until complete. |
 | **`/sleep`** or **`/unload`** | Manually unload model from RAM immediately (0 MB memory). |
 | **`/clear`** | Clear terminal screen and redraw status header. |
 | **`/quit`** or **`:q`** | Exit the program. |
@@ -120,18 +123,21 @@ This tool supports **any GGUF quantized model** (Qwen, DeepSeek-R1, Llama-3, Gem
 
 ## 📝 Customizing Translation Skills
 
-Prompts and linguistic rules are modularized as standalone Markdown files under `skills/`:
+Prompts and linguistic rules are modularized as standalone files under `skills/`:
 
 - `skills/base.md`: Universal base prompt (format preservation, URL protection, translatables).
 - `skills/ja_to_zh.md`: Japanese-to-Chinese skill (negation preservation, anti-semantic compression, SOV restructuring).
 - `skills/en_to_zh.md`: English-to-Chinese skill (clause restructuring, temporal/conditional pre-positioning).
 - `skills/zh_to_en.md`: Chinese-to-English skill (subject recovery, idiom meaning adaptation).
+- `skills/news_terms.json`: Curated news terminology used together with document-specific term planning.
 
 You can edit any `.md` file in `skills/` directly with your preferred editor. Changes take effect on the very next translation without restarting the program.
 
 ### Translation Quality Validation
 
-The translator buffers each model response before displaying it and checks observable defects: missing paragraphs or lines, reduced sentence count, changed Arabic numbers, missing English numeric expressions, and source-language residue in Chinese output. A failed first response triggers no more than one replacement generation at temperature `0.0`; the rejected response is never displayed.
+For news and other multi-paragraph input, short documents are translated as one unit while longer documents are split only at paragraph boundaries. A document glossary is planned once and shared across every chunk so names, places, institutions, and recurring terms stay consistent. The translator also detects likely truncated input and asks for confirmation instead of silently inventing an ending.
+
+Each response is checked for observable defects such as omitted structure, changed quantities, missing terms, and inappropriate source-language residue. Only a defective chunk is retried, at most once and at temperature `0.0`. The final translation is always shown; internal validator codes are never printed. If a defect remains, the user sees a concrete review note describing what to check. These safeguards improve accuracy but may make long-document translation roughly 1.5–2× slower, and they cannot mathematically prove semantic equivalence.
 
 Configure the behavior in `config.json` or `~/.config/ai-translator/config.json`:
 
@@ -142,7 +148,7 @@ Configure the behavior in `config.json` or `~/.config/ai-translator/config.json`
 }
 ```
 
-`quality_validation` accepts only `true` or `false`. `quality_retry_limit` accepts only `0` or `1`. Invalid values resolve to `true` and `1`. Validation can detect specified structural and lexical defects, but it cannot mathematically prove semantic equivalence. Automatic clipboard copying remains disabled.
+`quality_validation` accepts only `true` or `false`. `quality_retry_limit` accepts only `0` or `1`. Invalid values resolve to `true` and `1`. Automatic clipboard copying remains disabled.
 
 ---
 
@@ -156,14 +162,17 @@ ai-translator/
 ├── run.bat                 # Windows native launcher
 ├── requirements.txt        # Python dependency manifest
 ├── translator_cli.py       # Core CLI application (Universal GGUF)
+├── document_translation.py # Document glossary, truncation check, paragraph chunk planning
 ├── translation_quality.py  # Deterministic quality validation and one-retry policy
+├── assets/icons/           # macOS ICNS and cross-platform PNG launcher icons
 ├── models/                 # Dynamic model storage (drop any .gguf file here)
 │   └── .gitkeep
 ├── skills/                 # Dynamic linguistic rule prompts
 │   ├── base.md             # Base translation rules
 │   ├── ja_to_zh.md         # Japanese -> Chinese skill
 │   ├── en_to_zh.md         # English -> Chinese skill
-│   └── zh_to_en.md         # Chinese -> English skill
+│   ├── zh_to_en.md         # Chinese -> English skill
+│   └── news_terms.json     # Curated news terminology
 ├── README.md               # English documentation
 ├── README_zh.md            # Chinese documentation
 └── LICENSE                 # Apache-2.0 license

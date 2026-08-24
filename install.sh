@@ -296,6 +296,10 @@ def discard_partial(reason):
 
 while True:
     existing_size = os.path.getsize(target) if os.path.exists(target) else 0
+    metadata = read_metadata() if existing_size > 0 else None
+    if existing_size > 0 and metadata and metadata.get('model_host') != model_host:
+        discard_partial('下载节点已变化')
+        continue
     headers = {'Range': f'bytes={existing_size}-'} if existing_size > 0 else {}
     try:
         r = requests.get(url, headers=headers, stream=True, timeout=20)
@@ -307,7 +311,6 @@ while True:
                 pass
             break
         r.raise_for_status()
-        metadata = read_metadata() if existing_size > 0 else None
         remote_etag = r.headers.get('etag')
 
         if existing_size > 0:
@@ -316,9 +319,6 @@ while True:
                 r.close()
                 discard_partial('远端模型已变化或来源无法验证')
                 continue
-            if metadata.get('model_host') != model_host:
-                print('  ⚡ 已确认远端模型未变化，跨下载节点断点续传...')
-
         write_metadata(remote_etag)
         content_range = r.headers.get('content-range', '')
         total_size = int(content_range.split('/')[-1]) if content_range else int(r.headers.get('content-length', 0)) + existing_size
@@ -343,6 +343,9 @@ while True:
             except FileNotFoundError:
                 pass
             break
+    except KeyboardInterrupt:
+        print('\n  已取消模型下载；当前节点的进度已保留，下次可继续。')
+        sys.exit(130)
     except Exception as e:
         print(f'\n  连接重试中 (2秒后恢复断点续传: {e})...')
         time.sleep(2)

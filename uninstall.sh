@@ -99,6 +99,10 @@ if [ -n "$DESKTOP_PATH" ] && [ -d "$DESKTOP_PATH" ]; then
             echo -e "  ${GREEN}✓ 已移除桌面图标: $DESKTOP_PATH/$item${NC}"
         fi
     done
+    if [ -d "$DESKTOP_PATH/AI Translator.app" ]; then
+        rm -rf "$DESKTOP_PATH/AI Translator.app"
+        echo -e "  ${GREEN}✓ 已移除 macOS 应用图标: $DESKTOP_PATH/AI Translator.app${NC}"
+    fi
 fi
 
 # 清理全局命令
@@ -127,6 +131,7 @@ DEL_MODELS=${DEL_MODELS:-N}
 if [[ "$DEL_MODELS" =~ ^[Yy]$ ]]; then
     if [ -d "$PROJECT_DIR/models" ]; then
         rm -f "$PROJECT_DIR/models/"*.gguf
+        rm -f "$PROJECT_DIR/models/"*.download-meta.json
         echo -e "  ${GREEN}✓ 已清理本地模型权重文件 ($PROJECT_DIR/models/*.gguf)${NC}"
     fi
 else
