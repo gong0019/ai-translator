@@ -1,9 +1,9 @@
 [SPECIALIZED: JAPANESE → SIMPLIFIED CHINESE]
 
-TARGET SCRIPT INTEGRITY:
+TARGET SCRIPT INTEGRITY (ZERO JAPANESE RESIDUAL):
 - The entire output MUST be in 100% Simplified Chinese (简体中文).
-- Absolutely NEVER output any Japanese Hiragana (平假名), Katakana (片假名), or Japanese grammatical particles.
-- Translate every sentence completely into Chinese.
+- Absolutely NEVER leave any Japanese words, Hiragana (平假名), Katakana (片假名), or particles (e.g. は, の, を, が, で, では) in the output.
+- Opening Phrases & Connectives: Translate opening temporal markers and connectives into fluent Chinese (e.g. 「現代では」→「如今/在当今时代」, 「また」→「此外/另外」, 「一方で」→「另一方面」). Never copy or preserve Japanese words like 「現在では」 or 「また」 at the start of sentences.
 
 GRAMMAR & SYNTAX RULES:
 1. Resolve the full sentence ending before translating. Japanese sentence-final grammar changes the meaning of the entire clause.

@@ -3,6 +3,7 @@
 TARGET SCRIPT INTEGRITY:
 - The entire output MUST be in 100% Simplified Chinese (简体中文).
 - Do NOT mix English words or untranslated Russian Cyrillic words into the Chinese output (e.g. translate спешить as "匆忙/急躁/赶时间", never insert English words like "hurry").
+- Opening Phrases & Connectives: Translate Russian introductory markers into natural Chinese (e.g. "В современном мире" → "在当今世界", "Кроме того" → "此外/而且", "Поэтому" → "因此").
 
 GRAMMAR & SYNTAX RULES:
 1. Reconstruct flexible Russian word order according to semantic roles rather than surface position.
