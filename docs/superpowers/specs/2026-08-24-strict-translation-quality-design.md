@@ -30,7 +30,7 @@ Translation quality will use three independent layers:
 
 ## Prompt Contract
 
-`skills/base.md` will use imperative requirements with no discretionary phrases such as “when appropriate,” “where possible,” “if needed,” “prefer,” “try,” or “as natural as possible.”
+Every Skill file will use imperative requirements. A case-insensitive contract test will reject these discretionary terms and phrases: `appropriate`, `natural`, `naturally`, `idiomatic`, `prefer`, `try to`, `when needed`, `if needed`, `when necessary`, `if necessary`, `where needed`, `where necessary`, `where required`, `where possible`, `as needed`, `as appropriate`, `depending on context`, `according to context`, `context-appropriate`, `may choose`, and `can choose`.
 
 The contract will define these exact invariants:
 
@@ -118,12 +118,12 @@ The validator deliberately reports observable defects only. It must not label an
 
 The first translation uses the configured temperature and repeat penalty. If validation returns any error code:
 
-1. Do not print or copy the rejected first result.
+1. Do not print the rejected first result or expose it to any downstream consumer.
 2. Build a repair system message containing the base prompt, pair Skill, stable error codes, source text, and rejected translation.
 3. Require a full replacement translation, not a patch or explanation.
 4. Retry exactly once with `temperature=0.0`; keep the configured repeat penalty and token limit.
 5. Validate the replacement.
-6. If the replacement passes, print and copy it.
+6. If the replacement passes, print it.
 7. If the replacement fails, print the replacement followed by a visible warning listing the remaining stable error codes. Never start a third model call.
 
 Streaming cannot expose a result before validation. Each attempt will therefore be collected in memory first and printed only after its validation decision. A short status message may indicate that validation or a retry is in progress.
@@ -139,14 +139,14 @@ Add these defaults:
 }
 ```
 
-`quality_retry_limit` accepts only `0` or `1`. Missing, non-integer, negative, and values greater than `1` are replaced with `1`. Existing configuration files remain valid because defaults are merged before use.
+`quality_validation` accepts only the JSON booleans `true` and `false`; every other value is replaced with `true`. `quality_retry_limit` accepts only the JSON integers `0` and `1`; booleans, missing values, strings, negative integers, and integers greater than `1` are replaced with `1`. Existing configuration files remain valid because defaults are merged before use.
 
 ## Failure Handling
 
 - A model exception follows the existing exception path and does not trigger a quality retry.
 - An output that reaches `max_tokens` is treated as a failed attempt and assigned `OUTPUT_TRUNCATED` before retry.
 - A validation implementation exception must not discard a completed translation. The program prints the translation and a warning containing `VALIDATOR_ERROR`; it does not retry because the error is not evidence of a translation defect.
-- Validation warnings go to the terminal only and are never included in clipboard translation text.
+- Validation warnings go to the terminal only. This feature must not restore the previously removed automatic clipboard-copy behavior.
 
 ## Tests
 
@@ -169,7 +169,7 @@ The work is complete only when all conditions are true:
 - the Nevada defective outputs supplied by the user fail validation for explicit error codes;
 - the correct Nevada translation passes validation;
 - an invalid first generation triggers exactly one repair attempt;
-- no rejected first generation is displayed or copied;
+- no rejected first generation is displayed or exposed to another consumer;
 - all new and existing automated tests pass;
 - Python compilation and shell syntax checks pass;
 - no network access or external service is required at runtime.
