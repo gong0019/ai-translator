@@ -4,7 +4,7 @@
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
 Architecture: Python Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: Persistent Config (config.json), Fixed Bottom Status Toolbar & Live Header Sync, Dynamic Model Discovery
+Features: Persistent User Config (~/.config/ai-translator/config.json), Fixed Bottom Status Toolbar & Live Header Sync
 """
 
 import os
@@ -32,7 +32,11 @@ console = Console()
 BASE_DIR = os.path.dirname(__file__)
 SKILLS_DIR = os.path.join(BASE_DIR, "skills")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
-CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+
+# 优先存放在系统标准的用户配置目录 ~/.config/ai-translator/config.json
+USER_CONFIG_DIR = os.path.expanduser("~/.config/ai-translator")
+USER_CONFIG_FILE = os.path.join(USER_CONFIG_DIR, "config.json")
+LOCAL_CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
 LANGUAGES = {
     "1": ("中文", "Simplified Chinese", "zh", "🇨🇳"),
@@ -158,7 +162,7 @@ class TranslatorCLI:
         self.llm = None
         self.lock = threading.Lock()
 
-        # 读取持久化配置 (config.json)
+        # 读取持久化配置
         self.load_config()
 
         # 动态扫描 models/*.gguf 模型
@@ -217,10 +221,16 @@ class TranslatorCLI:
         self.watchdog.start()
 
     def load_config(self):
-        """从 config.json 读取持久化用户偏好"""
-        if os.path.exists(CONFIG_FILE):
+        """优先从 ~/.config/ai-translator/config.json 读取，次选本地 config.json"""
+        target_file = None
+        if os.path.exists(USER_CONFIG_FILE):
+            target_file = USER_CONFIG_FILE
+        elif os.path.exists(LOCAL_CONFIG_FILE):
+            target_file = LOCAL_CONFIG_FILE
+
+        if target_file:
             try:
-                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                with open(target_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.target_lang_key = str(data.get("target_lang_key", "1"))
                     self.auto_copy = bool(data.get("auto_copy", True))
@@ -230,7 +240,7 @@ class TranslatorCLI:
                 pass
 
     def save_config(self):
-        """将用户偏好即时保存到 config.json"""
+        """双重持久化保存：写入 ~/.config/ai-translator/config.json 与项目目录"""
         current_fn = ""
         if self.active_model_idx in self.models_map:
             current_fn = self.models_map[self.active_model_idx]["filename"]
@@ -241,8 +251,18 @@ class TranslatorCLI:
             "auto_copy": self.auto_copy,
             "idle_timeout": self.idle_timeout
         }
+        
+        # 1. 写入用户主目录 ~/.config/ai-translator/config.json
         try:
-            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            os.makedirs(USER_CONFIG_DIR, exist_ok=True)
+            with open(USER_CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+        # 2. 写入项目本地 config.json
+        try:
+            with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception:
             pass
@@ -266,7 +286,7 @@ class TranslatorCLI:
             }
             idx += 1
 
-        # 1. 优先定位 config.json 中保存的模型文件名
+        # 1. 优先定位保存的模型文件名
         found_saved = False
         if self.saved_model_filename:
             for k, info in self.models_map.items():
@@ -430,7 +450,7 @@ class TranslatorCLI:
                 with self.lock:
                     self.active_model_idx = choice
                     self.saved_model_filename = self.models_map[choice]["filename"]
-                    self.save_config()  # 立即保存新模型偏好
+                    self.save_config()  # 立即持久化保存
                     self._load_llama(self.models_map[choice]["path"])
                     self.last_active_time = time.time()
                 
@@ -454,7 +474,7 @@ class TranslatorCLI:
             choice = input("\n请输入语言编号 [1-9]: ").strip()
             if choice in LANGUAGES:
                 self.target_lang_key = choice
-                self.save_config()  # 立即保存新语言偏好
+                self.save_config()  # 立即持久化保存
                 console.clear()
                 self.print_header()
                 console.print(f"\n[bold green]✓ 输出语言已变更为:[/] [yellow]{self.target_lang_display}[/] [dim](已保存偏好)[/]\n")
@@ -465,7 +485,7 @@ class TranslatorCLI:
 
     def toggle_copy(self):
         self.auto_copy = not self.auto_copy
-        self.save_config()  # 立即保存剪贴板偏好
+        self.save_config()  # 立即持久化保存
         console.clear()
         self.print_header()
         status = "[green]开启 (ON)[/]" if self.auto_copy else "[red]关闭 (OFF)[/]"
