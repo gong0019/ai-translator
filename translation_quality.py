@@ -37,6 +37,14 @@ _CHINESE_DECIMAL = re.compile(
     r"(?:百分之)?(?P<integer>[零〇一二两三四五六七八九十百千万亿]+)"
     r"点(?P<fraction>[零〇一二两三四五六七八九]+)"
 )
+_CHINESE_QUANTITY_SUFFIX = re.compile(
+    r"(?:[%％]|人|名|位|个|只|条|件|项|次|岁|年|月|天|日|周|时|分|秒|"
+    r"小时|分钟|个月|家|国|所|辆|吨|克|千克|米|公里|元|万元|美元|英镑|"
+    r"欧元|倍)"
+)
+_CHINESE_QUANTITY_PREFIX = re.compile(
+    r"(?:第|约|近|超过|不足|人民币|美元|英镑|欧元|[$￥¥£€]|百分之)$"
+)
 _SOURCE_ACRONYM = re.compile(
     r"\b(?:[A-Z]{2,5}|[A-Z]{1,6}(?:-\d{1,3}|\d{1,3}))\b"
 )
@@ -306,7 +314,11 @@ def _numeric_candidates(text: str) -> list[tuple[int, int | str, bool]]:
         if any(start < used_end and end > used_start for used_start, used_end in occupied):
             continue
         token = match.group(0)
-        candidates.append((match.start(), _parse_chinese_integer(token), len(token) > 1))
+        strict_extra = len(token) > 1 and bool(
+            _CHINESE_QUANTITY_SUFFIX.match(normalized[end:])
+            or _CHINESE_QUANTITY_PREFIX.search(normalized[:start])
+        )
+        candidates.append((match.start(), _parse_chinese_integer(token), strict_extra))
     return sorted(candidates)
 
 

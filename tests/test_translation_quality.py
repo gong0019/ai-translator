@@ -158,6 +158,18 @@ class TranslationValidatorTests(unittest.TestCase):
             ),
         )
 
+    def test_accepts_non_quantity_chinese_numeral_idioms(self):
+        cases = (
+            ("Please do not leave.", "千万不要离开。"),
+            ("They responded individually.", "他们一一回应。"),
+        )
+        for source, output in cases:
+            with self.subTest(output=output):
+                self.assertNotIn(
+                    "ARABIC_NUMBER_MISMATCH",
+                    validate_translation(source, output, "zh"),
+                )
+
     def test_accepts_chinese_decimal_equivalent(self):
         self.assertEqual(
             validate_translation(
