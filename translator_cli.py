@@ -3,8 +3,8 @@
 """
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
-Architecture: Fast Multi-Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: 24 Specialized Linguistic Skills, Deterministic Prompt Pipeline, Smart Paragraph Streamer
+Architecture: Dynamic Multi-Language Sniffer + Modular File-based Skill Routing (skills/*.md)
+Features: 24 Specialized Linguistic Skills, Paragraph-Level Dynamic Routing, Robust Anti-Leakage
 """
 
 import os
@@ -486,7 +486,7 @@ class TranslatorCLI:
         # 显式注入确定性的 DIRECTION
         base_prompt = base_template.replace("{source_name}", source_name).replace("{target_name}", target_name)
         
-        # 拼接专属专项 Skill (如 ja_to_zh, en_to_de, ko_to_zh 等)
+        # 拼接专属专项 Skill
         pair_key = f"{source_code}_to_{target_code}"
         skill_prompt = load_skill(pair_key)
         
@@ -591,21 +591,22 @@ class TranslatorCLI:
         max_tokens = int(self.config.get("max_tokens", 4096))
 
         try:
-            # 智能按自然段分切，确保长文本在小模型中 100% 保持精准忠实度与无漂移
-            raw_paragraphs = text.split('\n\n')
+            # 强化自然段正则切分（容忍包含空格/制表符的空行）
+            raw_paragraphs = re.split(r'\n\s*\n', text)
             paragraphs = [p.strip() for p in raw_paragraphs if p.strip()]
 
             if not paragraphs:
                 paragraphs = [text.strip()]
 
-            _, source_name, target_name = self.build_dynamic_prompt(paragraphs[0])
+            _, first_source, first_target = self.build_dynamic_prompt(paragraphs[0])
             console.print()
-            console.rule(f"[bold green]Translation ➔ {target_name} ({source_name} ➔ {target_name})[/]", style="green")
+            console.rule(f"[bold green]Translation ➔ {first_target}[/]", style="green")
 
             for i, p in enumerate(paragraphs):
                 if not p:
                     continue
 
+                # 每一段独立嗅探源语言并精准路由对应 Skill
                 system_prompt, _, _ = self.build_dynamic_prompt(p)
                 messages = [
                     {"role": "system", "content": system_prompt},
