@@ -144,6 +144,10 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertIn("斯科特·贝森特发表讲话。", rendered)
         self.assertIn("贝森特随后接受路透社采访。", rendered)
         self.assertEqual(len(cli.llm.calls), 2)
+        self.assertIn(
+            "en_to_zh",
+            cli.llm.calls[0]["messages"][0]["content"],
+        )
         translation_call = cli.llm.calls[1]
         self.assertEqual(translation_call["messages"][1]["content"], source)
         self.assertIn(

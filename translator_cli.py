@@ -575,7 +575,8 @@ class TranslatorCLI:
 
         request = (
             "Return one JSON object mapping every supplied source term to its "
-            "standard target-language news rendering. Keep the keys exactly unchanged. "
+            f"standard target-language news rendering for {pair_key}. "
+            "Keep the keys exactly unchanged. "
             "Return JSON only.\n\nSOURCE TERMS:\n"
             + json.dumps(unknown, ensure_ascii=False)
         )
