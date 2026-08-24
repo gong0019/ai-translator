@@ -1,0 +1,33 @@
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Model Weights (Large Binary Files)
+models/*.gguf
+models/*.bin
+models/*.safetensors
+models/*.pth
+!models/.gitkeep
+
+# Logs & Temporary Files
+*.log
+/tmp/
+.cache/
+*.tmp
+
+# IDEs & System Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
