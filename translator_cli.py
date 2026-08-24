@@ -529,7 +529,12 @@ class TranslatorCLI:
             pair_key = f"{source_code}_to_{target_code}"
         return source_name, target_name, target_code, pair_key
 
-    def build_dynamic_prompt(self, text: str, glossary=None):
+    def build_dynamic_prompt(
+        self,
+        text: str,
+        glossary=None,
+        previous_translation: str = "",
+    ):
         source_name, target_name, _, pair_key = self._resolve_translation_route(text)
         
         base_template = load_skill("base")
@@ -549,6 +554,13 @@ class TranslatorCLI:
         glossary_prompt = format_glossary(glossary or {})
         if glossary_prompt:
             final_prompt = f"{final_prompt}\n\n{glossary_prompt}"
+
+        if previous_translation:
+            final_prompt = (
+                f"{final_prompt}\n\n"
+                "PREVIOUS CONFIRMED TRANSLATION (context only; do not repeat):\n"
+                f"{previous_translation}"
+            )
 
         return final_prompt, source_name, target_name
 
@@ -742,32 +754,43 @@ class TranslatorCLI:
                 normalized_text,
                 self._count_tokens,
                 max_source_tokens,
+                stream_each_paragraph=True,
             )
+            previous_translation = ""
             console.print()
             console.rule(f"[bold green]Translation ➔ {self.target_lang_display}[/]", style="green")
 
             for chunk_index, chunk in enumerate(chunks):
-                system_prompt, _, _ = self.build_dynamic_prompt(chunk, glossary)
-                outcome = run_quality_checked_completion(
-                    source=chunk,
-                    target_code=resolved_target_code,
-                    system_prompt=system_prompt,
-                    complete=lambda messages, attempt_temperature: self._collect_completion(
-                        messages,
-                        attempt_temperature,
-                        repeat_penalty,
-                        max_tokens,
-                    ),
-                    temperature=temperature,
-                    retry_limit=retry_limit,
-                    validation_enabled=validation_enabled,
-                    glossary=glossary,
+                system_prompt, _, _ = self.build_dynamic_prompt(
+                    chunk,
+                    glossary,
+                    previous_translation,
                 )
+                with console.status(
+                    f"[dim cyan]正在翻译第 {chunk_index + 1}/{len(chunks)} 段...[/]",
+                    spinner="dots",
+                ):
+                    outcome = run_quality_checked_completion(
+                        source=chunk,
+                        target_code=resolved_target_code,
+                        system_prompt=system_prompt,
+                        complete=lambda messages, attempt_temperature: self._collect_completion(
+                            messages,
+                            attempt_temperature,
+                            repeat_penalty,
+                            max_tokens,
+                        ),
+                        temperature=temperature,
+                        retry_limit=retry_limit,
+                        validation_enabled=validation_enabled,
+                        glossary=glossary,
+                    )
 
                 sys.stdout.write(outcome.text)
                 if not outcome.text.endswith("\n"):
                     sys.stdout.write("\n")
                 sys.stdout.flush()
+                previous_translation = outcome.text
                 if chunk_index < len(chunks) - 1:
                     sys.stdout.write("\n")
                     sys.stdout.flush()

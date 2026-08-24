@@ -15,6 +15,10 @@ _CAPITALIZED_TERM_RE = re.compile(
     r"\b(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:(?:of|the|and|de|la)\s+)?(?:[A-Z][a-z]+|[A-Z]{2,}))*\b"
 )
 _FENCED_JSON_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL)
+_SENTENCE_CHUNK_RE = re.compile(r".+?(?:[.!?。！？]+(?:\s+|$)|$)", re.DOTALL)
+_FALLBACK_CHUNK_TOKEN_RE = re.compile(
+    r"[\u4e00-\u9fff]|[A-Za-z0-9]+|[^\w\s]|\s+"
+)
 
 
 def extract_term_candidates(text: str) -> tuple[str, ...]:
@@ -101,8 +105,21 @@ def plan_paragraph_chunks(
     text: str,
     count_tokens: Callable[[str], int],
     max_source_tokens: int,
+    stream_each_paragraph: bool = False,
 ) -> list[str]:
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+    if stream_each_paragraph:
+        chunks = []
+        for paragraph in paragraphs:
+            chunks.extend(
+                _split_oversized_paragraph(
+                    paragraph,
+                    count_tokens,
+                    max_source_tokens,
+                )
+            )
+        return chunks
+
     chunks = []
     current = []
     for paragraph in paragraphs:
@@ -115,3 +132,53 @@ def plan_paragraph_chunks(
     if current:
         chunks.append("\n\n".join(current))
     return chunks
+
+
+def _split_oversized_paragraph(
+    paragraph: str,
+    count_tokens: Callable[[str], int],
+    max_source_tokens: int,
+) -> list[str]:
+    if count_tokens(paragraph) <= max_source_tokens:
+        return [paragraph]
+
+    sentences = [part.strip() for part in _SENTENCE_CHUNK_RE.findall(paragraph) if part.strip()]
+    chunks: list[str] = []
+    current: list[str] = []
+    for sentence in sentences:
+        candidate = " ".join((*current, sentence))
+        if current and count_tokens(candidate) > max_source_tokens:
+            chunks.append(" ".join(current))
+            current = [sentence]
+        else:
+            current.append(sentence)
+    if current:
+        chunks.append(" ".join(current))
+
+    expanded: list[str] = []
+    for chunk in chunks:
+        if count_tokens(chunk) <= max_source_tokens:
+            expanded.append(chunk)
+            continue
+        expanded.extend(_split_at_token_boundaries(chunk, count_tokens, max_source_tokens))
+    return expanded
+
+
+def _split_at_token_boundaries(
+    text: str,
+    count_tokens: Callable[[str], int],
+    max_source_tokens: int,
+) -> list[str]:
+    pieces = _FALLBACK_CHUNK_TOKEN_RE.findall(text)
+    chunks: list[str] = []
+    current = ""
+    for piece in pieces:
+        candidate = current + piece
+        if current.strip() and count_tokens(candidate) > max_source_tokens:
+            chunks.append(current.strip())
+            current = piece.lstrip()
+        else:
+            current = candidate
+    if current.strip():
+        chunks.append(current.strip())
+    return chunks or [text]

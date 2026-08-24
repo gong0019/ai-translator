@@ -125,12 +125,12 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertNotIn("可能存在数字不一致", rendered)
         self.assertEqual(len(cli.llm.calls), 3)
 
-    def test_short_document_uses_one_glossary_and_one_translation_request(self):
+    def test_multi_paragraph_document_uses_one_glossary_and_per_paragraph_requests(self):
         cli = self.make_cli(
             (
                 ('{"Scott Bessent":"斯科特·贝森特","Bessent":"贝森特"}', "stop"),
+                ("斯科特·贝森特发表讲话。", "stop"),
                 (
-                    "斯科特·贝森特发表讲话。\n\n"
                     "贝森特随后接受路透社采访。",
                     "stop",
                 ),
@@ -146,13 +146,16 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertIn("斯科特·贝森特发表讲话。", rendered)
         self.assertIn("贝森特随后接受路透社采访。", rendered)
-        self.assertEqual(len(cli.llm.calls), 2)
+        self.assertEqual(len(cli.llm.calls), 3)
         self.assertIn(
             "en_to_zh",
             cli.llm.calls[0]["messages"][0]["content"],
         )
         translation_call = cli.llm.calls[1]
-        self.assertEqual(translation_call["messages"][1]["content"], source)
+        self.assertEqual(
+            translation_call["messages"][1]["content"],
+            "Scott Bessent made the comments.",
+        )
         self.assertIn(
             "- Reuters => 路透社",
             translation_call["messages"][0]["content"],
@@ -160,6 +163,14 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertIn(
             "- Bessent => 贝森特",
             translation_call["messages"][0]["content"],
+        )
+        self.assertEqual(
+            cli.llm.calls[2]["messages"][1]["content"],
+            "Bessent later spoke to Reuters.",
+        )
+        self.assertIn(
+            "斯科特·贝森特发表讲话。",
+            cli.llm.calls[2]["messages"][0]["content"],
         )
 
     def test_declining_truncated_input_skips_all_model_calls(self):
@@ -198,6 +209,40 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         ]
         self.assertEqual(translated_sources.count("First paragraph."), 1)
         self.assertEqual(len(cli.llm.calls), 4)
+
+    def test_next_paragraph_receives_previous_confirmed_translation(self):
+        cli = self.make_cli(
+            (
+                ('{"First":"第一","Second":"第二"}', "stop"),
+                ("第一段。", "stop"),
+                ("第二段。", "stop"),
+            )
+        )
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            cli.stream_translate("First paragraph.\n\nSecond paragraph.")
+
+        self.assertIn("第一段。", output.getvalue())
+        self.assertIn("第二段。", output.getvalue())
+        second_translation_prompt = cli.llm.calls[2]["messages"][0]["content"]
+        self.assertIn("PREVIOUS CONFIRMED TRANSLATION", second_translation_prompt)
+        self.assertIn("第一段。", second_translation_prompt)
+
+    def test_multi_paragraph_translation_shows_progress_while_next_chunk_runs(self):
+        cli = self.make_cli(
+            (
+                ('{"First":"第一","Second":"第二"}', "stop"),
+                ("第一段。", "stop"),
+                ("第二段。", "stop"),
+            )
+        )
+        with patch("translator_cli.console.status") as status:
+            with contextlib.redirect_stdout(io.StringIO()):
+                cli.stream_translate("First paragraph.\n\nSecond paragraph.")
+
+        self.assertEqual(status.call_count, 2)
+        self.assertIn("第 1/2 段", status.call_args_list[0].args[0])
+        self.assertIn("第 2/2 段", status.call_args_list[1].args[0])
 
 
 if __name__ == "__main__":

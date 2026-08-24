@@ -34,6 +34,30 @@ class ParagraphChunkPlanningTests(unittest.TestCase):
             ["One two three.\n\nFour five six.", "Seven eight nine."],
         )
 
+    def test_streaming_mode_emits_each_paragraph_immediately(self):
+        text = "Heading\n\nFirst paragraph.\n\nSecond paragraph."
+        self.assertEqual(
+            plan_paragraph_chunks(
+                text,
+                lambda value: len(value.split()),
+                20,
+                stream_each_paragraph=True,
+            ),
+            ["Heading", "First paragraph.", "Second paragraph."],
+        )
+
+    def test_streaming_mode_splits_an_oversized_single_paragraph(self):
+        text = "One two. Three four. Five six."
+        self.assertEqual(
+            plan_paragraph_chunks(
+                text,
+                lambda value: len(value.split()),
+                3,
+                stream_each_paragraph=True,
+            ),
+            ["One two.", "Three four.", "Five six."],
+        )
+
 
 class DocumentTerminologyTests(unittest.TestCase):
     def test_extracts_document_terms_without_sentence_starters(self):

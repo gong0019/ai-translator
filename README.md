@@ -135,7 +135,7 @@ You can edit any `.md` file in `skills/` directly with your preferred editor. Ch
 
 ### Translation Quality Validation
 
-For news and other multi-paragraph input, short documents are translated as one unit while longer documents are split only at paragraph boundaries. A document glossary is planned once and shared across every chunk so names, places, institutions, and recurring terms stay consistent. The translator also detects likely truncated input and asks for confirmation instead of silently inventing an ending.
+For news and other multi-paragraph input, every paragraph is translated, checked, and displayed before the next one begins. A paragraph over the source-token limit is split at sentence boundaries first, then at safe token boundaries if needed. A document glossary is planned once and shared across every chunk; the next chunk also receives the preceding confirmed translation as continuity-only context, so names, references, and tense remain consistent without delaying visible output. The translator also detects likely truncated input and asks for confirmation instead of silently inventing an ending.
 
 Each response is checked for observable defects such as omitted structure, changed quantities, missing terms, and inappropriate source-language residue. Only a defective chunk is retried, at most once and at temperature `0.0`. The final translation is always shown; validator codes and review warnings stay out of normal terminal output. These safeguards improve accuracy but may make long-document translation roughly 1.5–2× slower, and they cannot mathematically prove semantic equivalence.
 
