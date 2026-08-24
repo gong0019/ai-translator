@@ -76,6 +76,17 @@ class DocumentTerminologyTests(unittest.TestCase):
             ("Strait of Hormuz",),
         )
 
+    def test_extracts_individual_people_with_camel_case_surnames(self):
+        source = (
+            "Shirley Freeman, Julia Stephen and David McColl's victims spoke. "
+            "Sheriff Craig Findlater delivered the ruling."
+        )
+        candidates = extract_term_candidates(source)
+        self.assertIn("Shirley Freeman", candidates)
+        self.assertIn("Julia Stephen", candidates)
+        self.assertIn("David McColl", candidates)
+        self.assertIn("Craig Findlater", candidates)
+
     def test_sentence_starter_does_not_absorb_following_lowercase_words(self):
         self.assertEqual(
             extract_term_candidates("He said London was important."),
@@ -92,6 +103,17 @@ class DocumentTerminologyTests(unittest.TestCase):
         self.assertEqual(
             glossary,
             {"Bessent": "贝森特", "Reuters": "路透社", "BST": "英国夏令时"},
+        )
+
+    def test_person_glossary_adds_last_name_alias_for_later_paragraphs(self):
+        glossary = parse_glossary_response(
+            '{"David McColl":"戴维·麦科尔"}',
+            ("David McColl",),
+            {},
+        )
+        self.assertEqual(
+            glossary,
+            {"David McColl": "戴维·麦科尔", "McColl": "麦科尔"},
         )
 
     def test_malformed_planner_json_falls_back_to_curated_terms(self):

@@ -529,12 +529,7 @@ class TranslatorCLI:
             pair_key = f"{source_code}_to_{target_code}"
         return source_name, target_name, target_code, pair_key
 
-    def build_dynamic_prompt(
-        self,
-        text: str,
-        glossary=None,
-        previous_translation: str = "",
-    ):
+    def build_dynamic_prompt(self, text: str, glossary=None):
         source_name, target_name, _, pair_key = self._resolve_translation_route(text)
         
         base_template = load_skill("base")
@@ -554,13 +549,6 @@ class TranslatorCLI:
         glossary_prompt = format_glossary(glossary or {})
         if glossary_prompt:
             final_prompt = f"{final_prompt}\n\n{glossary_prompt}"
-
-        if previous_translation:
-            final_prompt = (
-                f"{final_prompt}\n\n"
-                "PREVIOUS CONFIRMED TRANSLATION (context only; do not repeat):\n"
-                f"{previous_translation}"
-            )
 
         return final_prompt, source_name, target_name
 
@@ -590,6 +578,8 @@ class TranslatorCLI:
         request = (
             "Return one JSON object mapping every supplied source term to its "
             f"standard target-language news rendering for {pair_key}. "
+            "For personal names, use a target-language transliteration and do not "
+            "leave the source name in Latin letters. "
             "Keep the keys exactly unchanged. "
             "Return JSON only.\n\nSOURCE TERMS:\n"
             + json.dumps(unknown, ensure_ascii=False)
@@ -764,7 +754,6 @@ class TranslatorCLI:
                 system_prompt, _, _ = self.build_dynamic_prompt(
                     chunk,
                     glossary,
-                    previous_translation,
                 )
                 with console.status(
                     f"[dim cyan]正在翻译第 {chunk_index + 1}/{len(chunks)} 段...[/]",
@@ -784,6 +773,7 @@ class TranslatorCLI:
                         retry_limit=retry_limit,
                         validation_enabled=validation_enabled,
                         glossary=glossary,
+                        previous_output=previous_translation,
                     )
 
                 sys.stdout.write(outcome.text)

@@ -168,8 +168,8 @@ class CLIQualityIntegrationTests(unittest.TestCase):
             cli.llm.calls[2]["messages"][1]["content"],
             "Bessent later spoke to Reuters.",
         )
-        self.assertIn(
-            "斯科特·贝森特发表讲话。",
+        self.assertNotIn(
+            "PREVIOUS CONFIRMED TRANSLATION",
             cli.llm.calls[2]["messages"][0]["content"],
         )
 
@@ -210,7 +210,7 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertEqual(translated_sources.count("First paragraph."), 1)
         self.assertEqual(len(cli.llm.calls), 4)
 
-    def test_next_paragraph_receives_previous_confirmed_translation(self):
+    def test_next_paragraph_uses_glossary_without_repeating_previous_translation(self):
         cli = self.make_cli(
             (
                 ('{"First":"第一","Second":"第二"}', "stop"),
@@ -225,8 +225,9 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertIn("第一段。", output.getvalue())
         self.assertIn("第二段。", output.getvalue())
         second_translation_prompt = cli.llm.calls[2]["messages"][0]["content"]
-        self.assertIn("PREVIOUS CONFIRMED TRANSLATION", second_translation_prompt)
-        self.assertIn("第一段。", second_translation_prompt)
+        self.assertIn("- First => 第一", second_translation_prompt)
+        self.assertNotIn("PREVIOUS CONFIRMED TRANSLATION", second_translation_prompt)
+        self.assertNotIn("第一段。", second_translation_prompt)
 
     def test_multi_paragraph_translation_shows_progress_while_next_chunk_runs(self):
         cli = self.make_cli(

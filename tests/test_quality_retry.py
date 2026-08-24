@@ -245,6 +245,28 @@ class QualityRetryTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertTrue(result.errors)
 
+    def test_retries_a_chunk_that_copies_too_much_of_the_previous_translation(self):
+        outputs = iter(
+            (
+                CompletionResult("上一段新闻称六人受伤，火势仍在蔓延。"),
+                CompletionResult("第二段说明，当局正在调查事故原因。"),
+            )
+        )
+        calls = []
+
+        outcome = run_quality_checked_completion(
+            "Authorities are investigating the cause.",
+            "zh",
+            "SYSTEM",
+            lambda messages, temperature: (calls.append(temperature), next(outputs))[1],
+            0.1,
+            1,
+            previous_output="上一段新闻称六人受伤，火势仍在蔓延。",
+        )
+
+        self.assertEqual(outcome.text, "第二段说明，当局正在调查事故原因。")
+        self.assertEqual(calls, [0.1, 0.0])
+
     def test_truncation_forces_retry(self):
         outputs = iter(
             (

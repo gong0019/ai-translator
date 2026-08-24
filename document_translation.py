@@ -11,9 +11,12 @@ _DANGLING_ENGLISH_WORDS = {
 _SENTENCE_STARTERS = {
     "A", "An", "The", "One", "He", "She", "It", "They", "This", "That",
 }
+_CAPITALIZED_WORD = r"(?:[A-Z][a-z]+(?:[A-Z][a-z]+)*|[A-Z]{2,})"
 _CAPITALIZED_TERM_RE = re.compile(
-    r"\b(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:(?:of|the|and|de|la)\s+)?(?:[A-Z][a-z]+|[A-Z]{2,}))*\b"
+    rf"\b{_CAPITALIZED_WORD}(?:\s+(?:(?:of|the|and|de|la)\s+)?{_CAPITALIZED_WORD})*\b"
 )
+_PERSON_WORD_RE = re.compile(rf"^{_CAPITALIZED_WORD}$")
+_PERSON_TITLES = {"Sheriff"}
 _FENCED_JSON_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL)
 _SENTENCE_CHUNK_RE = re.compile(r".+?(?:[.!?。！？]+(?:\s+|$)|$)", re.DOTALL)
 _FALLBACK_CHUNK_TOKEN_RE = re.compile(
@@ -25,11 +28,12 @@ def extract_term_candidates(text: str) -> tuple[str, ...]:
     candidates = []
     for match in _CAPITALIZED_TERM_RE.finditer(text):
         words = match.group().split()
-        while words and words[0] in _SENTENCE_STARTERS:
+        while words and (words[0] in _SENTENCE_STARTERS or words[0] in _PERSON_TITLES):
             words.pop(0)
         candidate = " ".join(words)
-        if candidate and candidate not in candidates:
-            candidates.append(candidate)
+        for item in re.split(r"\s+and\s+", candidate):
+            if item and item not in candidates:
+                candidates.append(item)
     return tuple(candidates)
 
 
@@ -77,7 +81,21 @@ def parse_glossary_response(
             if source in requested and isinstance(target, str) and target.strip()
         }
     )
-    return glossary
+    return _add_person_last_name_aliases(glossary)
+
+
+def _add_person_last_name_aliases(glossary: dict[str, str]) -> dict[str, str]:
+    expanded = dict(glossary)
+    for source, target in glossary.items():
+        source_words = source.split()
+        target_words = [word for word in re.split(r"[·・\s]+", target) if word]
+        if (
+            len(source_words) == 2
+            and len(target_words) >= 2
+            and all(_PERSON_WORD_RE.fullmatch(word) for word in source_words)
+        ):
+            expanded.setdefault(source_words[-1], target_words[-1])
+    return expanded
 
 
 def format_glossary(glossary: dict[str, str]) -> str:

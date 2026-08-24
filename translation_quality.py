@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 import re
 from typing import Callable
 
@@ -463,6 +464,19 @@ def find_missing_glossary_terms(
     return tuple(missing)
 
 
+def has_excessive_previous_translation_overlap(
+    previous_output: str,
+    output: str,
+) -> bool:
+    """Detect accidental reuse of a substantial part of the prior chunk."""
+    previous = re.sub(r"[\W_]+", "", previous_output)
+    current = re.sub(r"[\W_]+", "", output)
+    if min(len(previous), len(current)) < 12:
+        return False
+    longest_match = SequenceMatcher(None, previous, current).find_longest_match().size
+    return longest_match >= 12 and longest_match / min(len(previous), len(current)) >= 0.45
+
+
 def validate_translation(source: str, output: str, target_code: str) -> list[str]:
     """Return stable codes for deterministic, observable translation defects."""
     if not output.strip():
@@ -526,12 +540,15 @@ def _validation_errors(
     result: CompletionResult,
     target_code: str,
     glossary: dict[str, str],
+    previous_output: str,
 ) -> tuple[str, ...]:
     errors = validate_translation(source, result.text, target_code)
     if find_missing_glossary_terms(source, result.text, glossary):
         errors.append("GLOSSARY_TERM_MISSING")
     if result.truncated and "OUTPUT_TRUNCATED" not in errors:
         errors.append("OUTPUT_TRUNCATED")
+    if has_excessive_previous_translation_overlap(previous_output, result.text):
+        errors.append("CROSS_CHUNK_REPETITION")
     return tuple(errors)
 
 
@@ -564,6 +581,9 @@ def _concrete_defects(
             "Preserve every source number exactly and do not add numbers."
         ),
         "OUTPUT_TRUNCATED": "Complete the translation; the previous output was truncated.",
+        "CROSS_CHUNK_REPETITION": (
+            "Translate only the current source chunk; do not repeat the prior chunk."
+        ),
     }
     for error in errors:
         instruction = instructions.get(error)
@@ -606,6 +626,8 @@ def _user_review_notes(
         notes.append("可能存在数字不一致，请人工检查。")
     if "OUTPUT_TRUNCATED" in errors:
         notes.append("译文可能被截断，请人工检查。")
+    if "CROSS_CHUNK_REPETITION" in errors:
+        notes.append("当前段可能重复了上一段，请人工检查。")
     return tuple(notes)
 
 
@@ -646,6 +668,7 @@ def run_quality_checked_completion(
     retry_limit: int,
     validation_enabled: bool = True,
     glossary: dict[str, str] | None = None,
+    previous_output: str = "",
 ) -> QualityOutcome:
     """Generate, validate, and perform no more than one repair attempt."""
     chunk_glossary = glossary or {}
@@ -663,6 +686,7 @@ def run_quality_checked_completion(
             first_result,
             target_code,
             chunk_glossary,
+            previous_output,
         )
     except Exception:
         return QualityOutcome(first_result.text, ("VALIDATOR_ERROR",), False)
@@ -705,6 +729,7 @@ def run_quality_checked_completion(
             second_result,
             target_code,
             chunk_glossary,
+            previous_output,
         )
     except Exception:
         return QualityOutcome(second_result.text, ("VALIDATOR_ERROR",), True)
