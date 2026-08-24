@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import re
 from typing import Callable
 
+from document_translation import format_glossary
+
 
 _SENTENCE_FINAL = tuple(".!?。！？:：;；")
 _STRUCTURAL_PREFIX = re.compile(
@@ -30,6 +32,8 @@ _WORD_WRAP_SUFFIXES = {
 }
 _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
 _ARABIC_NUMBER = re.compile(r"(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?")
+_CHINESE_NUMBER = re.compile(r"[零〇一二两三四五六七八九十百千万亿]+")
+_SOURCE_ACRONYM = re.compile(r"\b[A-Z]{2,8}\b")
 _LATIN_TOKEN = re.compile(r"[A-Za-z]+")
 _PROTECTED_PATTERNS = (
     re.compile(r"```[\s\S]*?```"),
@@ -127,6 +131,7 @@ class QualityOutcome:
     text: str
     errors: tuple[str, ...]
     retried: bool
+    review_notes: tuple[str, ...] = ()
 
 
 def _begins_structural_line(line: str) -> bool:
@@ -216,6 +221,75 @@ def _arabic_numbers(text: str) -> list[str]:
     return [match.group(0).replace(",", "") for match in _ARABIC_NUMBER.finditer(translated)]
 
 
+def _parse_chinese_integer(token: str) -> int:
+    digits = {
+        "零": 0,
+        "〇": 0,
+        "一": 1,
+        "二": 2,
+        "两": 2,
+        "三": 3,
+        "四": 4,
+        "五": 5,
+        "六": 6,
+        "七": 7,
+        "八": 8,
+        "九": 9,
+    }
+    units = {"十": 10, "百": 100, "千": 1000, "万": 10_000, "亿": 100_000_000}
+    if not any(char in units for char in token):
+        return int("".join(str(digits[char]) for char in token))
+
+    total = 0
+    section = 0
+    number = 0
+    for char in token:
+        if char in digits:
+            number = digits[char]
+            continue
+        unit = units[char]
+        if unit < 10_000:
+            section += (number or 1) * unit
+        else:
+            section += number
+            total += (section or 1) * unit
+            section = 0
+        number = 0
+    return total + section + number
+
+
+def _numeric_candidates(text: str) -> list[tuple[int, int | str]]:
+    normalized = text.translate(_FULLWIDTH_DIGITS)
+    candidates: list[tuple[int, int | str]] = []
+    for match in _ARABIC_NUMBER.finditer(normalized):
+        token = match.group(0).replace(",", "")
+        value: int | str = int(token) if "." not in token else token
+        candidates.append((match.start(), value))
+    for match in _CHINESE_NUMBER.finditer(normalized):
+        candidates.append((match.start(), _parse_chinese_integer(match.group(0))))
+    return sorted(candidates)
+
+
+def _has_arabic_number_mismatch(source: str, output: str) -> bool:
+    expected = [int(token) if "." not in token else token for token in _arabic_numbers(source)]
+    candidates = _numeric_candidates(output)
+    position = 0
+    for expected_value in expected:
+        while position < len(candidates) and candidates[position][1] != expected_value:
+            position += 1
+        if position == len(candidates):
+            return True
+        position += 1
+
+    source_values = list(expected)
+    for output_token in _arabic_numbers(output):
+        output_value: int | str = int(output_token) if "." not in output_token else output_token
+        if output_value not in source_values:
+            return True
+        source_values.remove(output_value)
+    return False
+
+
 def _english_number_concepts(text: str) -> list[object]:
     lowered = text.lower()
     concepts: list[tuple[int, object]] = []
@@ -280,7 +354,55 @@ def _remove_allowed_protected_spans(source: str, output: str) -> str:
     for span in extract_protected_spans(output):
         if span in allowed:
             cleaned = cleaned.replace(span, " ")
+    for acronym in set(_SOURCE_ACRONYM.findall(source)):
+        cleaned = cleaned.replace(acronym, " ")
     return cleaned
+
+
+def find_unexpected_latin_tokens(source: str, output: str) -> tuple[str, ...]:
+    """Return distinct target-script residuals that are not allowed spans."""
+    cleaned = _remove_allowed_protected_spans(source, output)
+    return tuple(dict.fromkeys(_LATIN_TOKEN.findall(cleaned)))
+
+
+def find_missing_glossary_terms(
+    source: str,
+    output: str,
+    glossary: dict[str, str],
+) -> tuple[str, ...]:
+    """Return required mappings missing after longest source terms are claimed."""
+    occupied: list[tuple[int, int]] = []
+    matches: list[tuple[int, str, str]] = []
+    for source_term, target_term in sorted(
+        glossary.items(),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
+        for match in re.finditer(re.escape(source_term), source):
+            start, end = match.span()
+            if any(start < used_end and end > used_start for used_start, used_end in occupied):
+                continue
+            occupied.append((start, end))
+            matches.append((start, source_term, target_term))
+
+    remaining_output = output
+    missing: list[str] = []
+    for _, source_term, target_term in sorted(
+        matches,
+        key=lambda item: (-len(item[1]), item[0]),
+    ):
+        position = remaining_output.find(target_term)
+        if position >= 0:
+            remaining_output = (
+                remaining_output[:position]
+                + (" " * len(target_term))
+                + remaining_output[position + len(target_term):]
+            )
+            continue
+        mapping = f"{source_term} => {target_term}"
+        if mapping not in missing:
+            missing.append(mapping)
+    return tuple(missing)
 
 
 def validate_translation(source: str, output: str, target_code: str) -> list[str]:
@@ -310,7 +432,7 @@ def validate_translation(source: str, output: str, target_code: str) -> list[str
     ):
         errors.append("SENTENCE_COUNT_LOSS")
 
-    if _arabic_numbers(normalized_source) != _arabic_numbers(normalized_output):
+    if _has_arabic_number_mismatch(normalized_source, normalized_output):
         errors.append("ARABIC_NUMBER_MISMATCH")
 
     if _has_english_number_mismatch(normalized_source, normalized_output):
@@ -345,29 +467,69 @@ def _validation_errors(
     source: str,
     result: CompletionResult,
     target_code: str,
+    glossary: dict[str, str],
 ) -> tuple[str, ...]:
     errors = validate_translation(source, result.text, target_code)
+    if find_missing_glossary_terms(source, result.text, glossary):
+        errors.append("GLOSSARY_TERM_MISSING")
     if result.truncated and "OUTPUT_TRUNCATED" not in errors:
         errors.append("OUTPUT_TRUNCATED")
     return tuple(errors)
+
+
+def _concrete_defects(
+    source: str,
+    output: str,
+    target_code: str,
+    glossary: dict[str, str],
+) -> tuple[str, ...]:
+    defects = []
+    if target_code == "zh":
+        defects.extend(
+            f"Translate this remaining source token: {token}"
+            for token in find_unexpected_latin_tokens(source, output)
+        )
+    defects.extend(
+        f"Use this required term: {mapping}"
+        for mapping in find_missing_glossary_terms(source, output, glossary)
+    )
+    return tuple(defects)
+
+
+def _user_review_notes(
+    source: str,
+    output: str,
+    target_code: str,
+    glossary: dict[str, str],
+) -> tuple[str, ...]:
+    if target_code != "zh":
+        return ()
+    tokens = find_unexpected_latin_tokens(source, output)
+    return (("可能仍有未翻译内容：" + "、".join(tokens)),) if tokens else ()
 
 
 def _repair_messages(
     system_prompt: str,
     source: str,
     rejected: str,
-    errors: tuple[str, ...],
+    defects: tuple[str, ...],
+    glossary: dict[str, str],
 ) -> list[dict[str, str]]:
-    repair_request = (
-        "The previous translation failed deterministic validation.\n"
-        f"ERROR_CODES: {', '.join(errors)}\n\n"
-        "SOURCE_TEXT:\n"
-        f"{source}\n\n"
-        "REJECTED_TRANSLATION:\n"
-        f"{rejected}\n\n"
-        "Return one complete replacement translation. "
-        "Do not return a patch, explanation, or analysis."
+    sections = [
+        "Correct only the defects listed below while preserving every other translated fact."
+        + ("\n" + "\n".join(f"- {defect}" for defect in defects) if defects else "")
+    ]
+    glossary_text = format_glossary(glossary)
+    if glossary_text:
+        sections.append(glossary_text)
+    sections.extend(
+        (
+            f"SOURCE CHUNK:\n{source}",
+            f"CURRENT TRANSLATION:\n{rejected}",
+            "Return the complete corrected translation only.",
+        )
     )
+    repair_request = "\n\n".join(sections)
     return [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": repair_request},
@@ -382,8 +544,10 @@ def run_quality_checked_completion(
     temperature: float,
     retry_limit: int,
     validation_enabled: bool = True,
+    glossary: dict[str, str] | None = None,
 ) -> QualityOutcome:
     """Generate, validate, and perform no more than one repair attempt."""
+    chunk_glossary = glossary or {}
     first_messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": source},
@@ -393,26 +557,52 @@ def run_quality_checked_completion(
         return QualityOutcome(first_result.text, (), False)
 
     try:
-        first_errors = _validation_errors(source, first_result, target_code)
+        first_errors = _validation_errors(
+            source,
+            first_result,
+            target_code,
+            chunk_glossary,
+        )
     except Exception:
         return QualityOutcome(first_result.text, ("VALIDATOR_ERROR",), False)
 
     if not first_errors:
         return QualityOutcome(first_result.text, (), False)
     if retry_limit != 1:
-        return QualityOutcome(first_result.text, first_errors, False)
+        return QualityOutcome(
+            first_result.text,
+            first_errors,
+            False,
+            _user_review_notes(source, first_result.text, target_code, chunk_glossary),
+        )
 
     second_result = complete(
         _repair_messages(
             system_prompt,
             source,
             first_result.text,
-            first_errors,
+            _concrete_defects(
+                source,
+                first_result.text,
+                target_code,
+                chunk_glossary,
+            ),
+            chunk_glossary,
         ),
         0.0,
     )
     try:
-        second_errors = _validation_errors(source, second_result, target_code)
+        second_errors = _validation_errors(
+            source,
+            second_result,
+            target_code,
+            chunk_glossary,
+        )
     except Exception:
         return QualityOutcome(second_result.text, ("VALIDATOR_ERROR",), True)
-    return QualityOutcome(second_result.text, second_errors, True)
+    return QualityOutcome(
+        second_result.text,
+        second_errors,
+        True,
+        _user_review_notes(source, second_result.text, target_code, chunk_glossary),
+    )

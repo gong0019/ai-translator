@@ -1,6 +1,11 @@
 import unittest
 
-from translation_quality import normalize_source_structure, validate_translation
+from translation_quality import (
+    find_missing_glossary_terms,
+    find_unexpected_latin_tokens,
+    normalize_source_structure,
+    validate_translation,
+)
 
 
 class SourceNormalizationTests(unittest.TestCase):
@@ -35,6 +40,26 @@ class SourceNormalizationTests(unittest.TestCase):
 
 
 class TranslationValidatorTests(unittest.TestCase):
+    def test_reports_exact_unexpected_latin_tokens(self):
+        self.assertEqual(
+            find_unexpected_latin_tokens(
+                "Bessent spoke to Reuters.",
+                "贝森特向Reuters发表讲话。",
+            ),
+            ("Reuters",),
+        )
+
+    def test_requires_longest_non_overlapping_glossary_term(self):
+        glossary = {"Scott Bessent": "斯科特·贝森特", "Bessent": "贝森特"}
+        self.assertEqual(
+            find_missing_glossary_terms(
+                "Scott Bessent spoke. Bessent continued.",
+                "斯科特·贝森特发表讲话。Bessent继续说道。",
+                glossary,
+            ),
+            ("Bessent => 贝森特",),
+        )
+
     def test_detects_empty_and_structure_loss(self):
         self.assertEqual(
             validate_translation("Title\nBody.", "", "zh"),
@@ -64,6 +89,49 @@ class TranslationValidatorTests(unittest.TestCase):
         source = "Six users opened https://example.com and `/opt/app/run.sh`."
         output = "六名用户打开了 https://example.com 和 `/opt/app/run.sh`。"
         self.assertEqual(validate_translation(source, output, "zh"), [])
+
+    def test_accepts_arabic_numbers_rendered_as_equivalent_chinese_numbers(self):
+        source = (
+            "Freeman was sentenced to 18 months probation, "
+            "240 hours of unpaid work, and a 12-month restriction."
+        )
+        output = (
+            "弗里曼被判处十八个月缓刑、二百四十小时无偿劳动，"
+            "并受到十二个月的人身自由限制。"
+        )
+        self.assertNotIn(
+            "ARABIC_NUMBER_MISMATCH",
+            validate_translation(source, output, "zh"),
+        )
+
+    def test_accepts_source_acronym_preserved_in_chinese_translation(self):
+        source = "The victims told BBC Scotland News about the abuse."
+        output = "受害者向BBC苏格兰新闻讲述了遭受虐待的经历。"
+        self.assertNotIn(
+            "TARGET_SCRIPT_RESIDUAL",
+            validate_translation(source, output, "zh"),
+        )
+
+    def test_accepts_complete_house_of_terror_article_translation(self):
+        source = (
+            'A mother, grandmother and stepfather subjected three children to years of abuse.\n\n'
+            'Freeman, 51, and Stephen, 69, were found guilty. McColl, 50, admitted the crimes.\n\n'
+            'Freeman received 18 months probation, 240 hours of unpaid work, and a 12-month restriction.\n\n'
+            'Stephen received 150 hours of unpaid work and 18 months probation.\n\n'
+            'McColl received 220 hours of unpaid work, 18 months probation, and an 11-month restriction.\n\n'
+            'The victims, now 25 and 28, told BBC Scotland News about the abuse.'
+        )
+        output = (
+            '一名母亲、祖母和继父对三名儿童实施了多年的虐待。\n\n'
+            '弗里曼现年五十一岁，斯蒂芬六十九岁，两人被判有罪；五十岁的麦科尔承认犯罪。\n\n'
+            '弗里曼被判十八个月缓刑、二百四十小时无偿劳动，并受到十二个月的人身自由限制。\n\n'
+            '斯蒂芬被判完成一百五十小时无偿劳动，并接受十八个月缓刑。\n\n'
+            '麦科尔被判完成二百二十小时无偿劳动、接受十八个月缓刑，并受到十一个月的人身自由限制。\n\n'
+            '两名受害者现年二十五岁和二十八岁，他们向BBC苏格兰新闻讲述了受虐经历。'
+        )
+        errors = validate_translation(source, output, "zh")
+        self.assertNotIn("ARABIC_NUMBER_MISMATCH", errors)
+        self.assertNotIn("TARGET_SCRIPT_RESIDUAL", errors)
 
     def test_tens_of_thousands_requires_equivalent_quantity(self):
         source = "Tens of thousands of people evacuated."
