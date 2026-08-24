@@ -125,7 +125,7 @@ rm -f /tmp/qwen_clipboard_ocr.png
 
 # 询问删除模型
 echo
-read -p "是否同时删除 models/ 目录下已下载的模型权重文件 (~几GB)？[y/N]: " DEL_MODELS
+read -r -p "是否删除 models/ 中已下载的模型文件（默认保留，下次安装可直接复用）？[y/N]: " DEL_MODELS || DEL_MODELS="N"
 DEL_MODELS=${DEL_MODELS:-N}
 
 if [[ "$DEL_MODELS" =~ ^[Yy]$ ]]; then
