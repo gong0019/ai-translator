@@ -4,7 +4,7 @@
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
 Architecture: Python Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: Persistent User Config (~/.config/ai-translator/config.json), Fixed Bottom Status Toolbar & Live Header Sync
+Features: Paragraph-Preserving Streamer, Persistent Config, Fixed Bottom Status Toolbar & Live Header Sync
 """
 
 import os
@@ -33,7 +33,6 @@ BASE_DIR = os.path.dirname(__file__)
 SKILLS_DIR = os.path.join(BASE_DIR, "skills")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 
-# 优先存放在系统标准的用户配置目录 ~/.config/ai-translator/config.json
 USER_CONFIG_DIR = os.path.expanduser("~/.config/ai-translator")
 USER_CONFIG_FILE = os.path.join(USER_CONFIG_DIR, "config.json")
 LOCAL_CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
@@ -252,7 +251,6 @@ class TranslatorCLI:
             "idle_timeout": self.idle_timeout
         }
         
-        # 1. 写入用户主目录 ~/.config/ai-translator/config.json
         try:
             os.makedirs(USER_CONFIG_DIR, exist_ok=True)
             with open(USER_CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -260,7 +258,6 @@ class TranslatorCLI:
         except Exception:
             pass
 
-        # 2. 写入项目本地 config.json
         try:
             with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
@@ -286,7 +283,6 @@ class TranslatorCLI:
             }
             idx += 1
 
-        # 1. 优先定位保存的模型文件名
         found_saved = False
         if self.saved_model_filename:
             for k, info in self.models_map.items():
@@ -295,7 +291,6 @@ class TranslatorCLI:
                     found_saved = True
                     break
 
-        # 2. 若无保存记录，则按优先级默认：3B -> 1.5B -> 7B
         if not found_saved:
             found_pref = False
             for pref in ["3b", "1.5b", "7b"]:
@@ -416,7 +411,7 @@ class TranslatorCLI:
         
         base_template = load_skill("base")
         if not base_template:
-            base_template = "You are a professional translator.\nDIRECTION: {source_name} → {target_name}\nTranslate the input into {target_name}."
+            base_template = "You are a professional translator.\nDIRECTION: {source_name} → {target_name}\nTranslate the input text into natural, accurate {target_name}."
         
         base_prompt = base_template.replace("{source_name}", source_name).replace("{target_name}", target_name)
         
@@ -450,7 +445,7 @@ class TranslatorCLI:
                 with self.lock:
                     self.active_model_idx = choice
                     self.saved_model_filename = self.models_map[choice]["filename"]
-                    self.save_config()  # 立即持久化保存
+                    self.save_config()
                     self._load_llama(self.models_map[choice]["path"])
                     self.last_active_time = time.time()
                 
@@ -474,7 +469,7 @@ class TranslatorCLI:
             choice = input("\n请输入语言编号 [1-9]: ").strip()
             if choice in LANGUAGES:
                 self.target_lang_key = choice
-                self.save_config()  # 立即持久化保存
+                self.save_config()
                 console.clear()
                 self.print_header()
                 console.print(f"\n[bold green]✓ 输出语言已变更为:[/] [yellow]{self.target_lang_display}[/] [dim](已保存偏好)[/]\n")
@@ -485,7 +480,7 @@ class TranslatorCLI:
 
     def toggle_copy(self):
         self.auto_copy = not self.auto_copy
-        self.save_config()  # 立即持久化保存
+        self.save_config()
         console.clear()
         self.print_header()
         status = "[green]开启 (ON)[/]" if self.auto_copy else "[red]关闭 (OFF)[/]"
@@ -521,31 +516,49 @@ class TranslatorCLI:
         start_time = time.time()
 
         try:
-            system_prompt, source_name, target_name = self.build_dynamic_prompt(text)
+            # 智能段落解构：长文章按段流式精译，彻底防止注意力漂移与语种污染
+            raw_paragraphs = text.split('\n\n')
+            paragraphs = [p.strip() for p in raw_paragraphs if p.strip()]
 
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text}
-            ]
+            if not paragraphs:
+                paragraphs = [text.strip()]
 
-            stream = self.llm.create_chat_completion(
-                messages=messages,
-                temperature=0.1,
-                repeat_penalty=1.08,
-                max_tokens=4096,
-                stream=True
-            )
-
+            _, source_name, target_name = self.build_dynamic_prompt(paragraphs[0])
             console.print()
             console.rule(f"[bold green]Translation ➔ {target_name} ({source_name} ➔ {target_name})[/]", style="green")
 
-            for chunk in stream:
-                delta = chunk['choices'][0].get('delta', {})
-                token = delta.get('content', '')
-                if token:
-                    full_translation += token
-                    sys.stdout.write(token)
+            for i, p in enumerate(paragraphs):
+                if not p:
+                    continue
+
+                system_prompt, _, _ = self.build_dynamic_prompt(p)
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": p}
+                ]
+
+                stream = self.llm.create_chat_completion(
+                    messages=messages,
+                    temperature=0.1,
+                    repeat_penalty=1.08,
+                    max_tokens=4096,
+                    stream=True
+                )
+
+                chunk_text = ""
+                for chunk in stream:
+                    delta = chunk['choices'][0].get('delta', {})
+                    token = delta.get('content', '')
+                    if token:
+                        chunk_text += token
+                        sys.stdout.write(token)
+                        sys.stdout.flush()
+
+                full_translation += chunk_text
+                if i < len(paragraphs) - 1:
+                    sys.stdout.write('\n\n')
                     sys.stdout.flush()
+                    full_translation += '\n\n'
 
             if not full_translation.endswith('\n'):
                 sys.stdout.write('\n')
