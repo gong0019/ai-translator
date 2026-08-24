@@ -4,7 +4,7 @@
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
 Architecture: Python Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: Paragraph-Preserving Streamer, Persistent Config, Fixed Bottom Status Toolbar & Live Header Sync
+Features: Atomic Fsync Persistence, Paragraph-Preserving Streamer, Fixed Bottom Status Toolbar & Live Header Sync
 """
 
 import os
@@ -239,7 +239,7 @@ class TranslatorCLI:
                 pass
 
     def save_config(self):
-        """双重持久化保存：写入 ~/.config/ai-translator/config.json 与项目目录"""
+        """物理级即时落盘保存 (fsync)：写入 ~/.config/ai-translator/config.json 与项目目录"""
         current_fn = ""
         if self.active_model_idx in self.models_map:
             current_fn = self.models_map[self.active_model_idx]["filename"]
@@ -251,16 +251,22 @@ class TranslatorCLI:
             "idle_timeout": self.idle_timeout
         }
         
+        # 1. 物理写入用户主目录 ~/.config/ai-translator/config.json
         try:
             os.makedirs(USER_CONFIG_DIR, exist_ok=True)
             with open(USER_CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
         except Exception:
             pass
 
+        # 2. 物理写入项目本地 config.json
         try:
             with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
         except Exception:
             pass
 
@@ -516,7 +522,6 @@ class TranslatorCLI:
         start_time = time.time()
 
         try:
-            # 智能段落解构：长文章按段流式精译，彻底防止注意力漂移与语种污染
             raw_paragraphs = text.split('\n\n')
             paragraphs = [p.strip() for p in raw_paragraphs if p.strip()]
 
