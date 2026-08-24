@@ -1,0 +1,14 @@
+{
+  "terms": [
+    {"en":"inflation","zh":"通货膨胀","ja":"インフレーション","ko":"인플레이션","de":"Inflation","fr":"inflation","es":"inflación","ru":"инфляция","it":"inflazione"},
+    {"en":"deflation","zh":"通货紧缩","ja":"デフレーション","ko":"디플레이션","de":"Deflation","fr":"déflation","es":"deflación","ru":"дефляция","it":"deflazione"},
+    {"en":"gross domestic product","zh":"国内生产总值","ja":"国内総生産","ko":"국내총생산","de":"Bruttoinlandsprodukt","fr":"produit intérieur brut","es":"producto interno bruto","ru":"валовой внутренний продукт","it":"prodotto interno lordo"},
+    {"en":"consumer price index","zh":"消费者价格指数","ja":"消費者物価指数","ko":"소비자물가지수","de":"Verbraucherpreisindex","fr":"indice des prix à la consommation","es":"índice de precios al consumidor","ru":"индекс потребительских цен","it":"indice dei prezzi al consumo"},
+    {"en":"monetary policy","zh":"货币政策","ja":"金融政策","ko":"통화정책","de":"Geldpolitik","fr":"politique monétaire","es":"política monetaria","ru":"денежно-кредитная политика","it":"politica monetaria"},
+    {"en":"interest rate","zh":"利率","ja":"金利","ko":"금리","de":"Zinssatz","fr":"taux d’intérêt","es":"tasa de interés","ru":"процентная ставка","it":"tasso di interesse"},
+    {"en":"quantitative easing","zh":"量化宽松","ja":"量的緩和","ko":"양적 완화","de":"quantitative Lockerung","fr":"assouplissement quantitatif","es":"flexibilización cuantitativa","ru":"количественное смягчение","it":"allentamento quantitativo"},
+    {"en":"fiscal deficit","zh":"财政赤字","ja":"財政赤字","ko":"재정 적자","de":"Haushaltsdefizit","fr":"déficit budgétaire","es":"déficit fiscal","ru":"бюджетный дефицит","it":"disavanzo di bilancio"},
+    {"en":"exchange rate","zh":"汇率","ja":"為替レート","ko":"환율","de":"Wechselkurs","fr":"taux de change","es":"tipo de cambio","ru":"валютный курс","it":"tasso di cambio"},
+    {"en":"liquidity","zh":"流动性","ja":"流動性","ko":"유동성","de":"Liquidität","fr":"liquidité","es":"liquidez","ru":"ликвидность","it":"liquidità"}
+  ]
+}

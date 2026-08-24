@@ -6,6 +6,7 @@ from document_translation import (
     format_glossary,
     load_curated_terms,
     looks_likely_truncated,
+    match_curated_terms,
     parse_glossary_response,
     plan_paragraph_chunks,
 )
@@ -140,6 +141,34 @@ class DocumentTerminologyTests(unittest.TestCase):
                 "BBC": "BBC",
                 "BST": "英国夏令时",
             },
+        )
+
+    def test_loads_multilingual_specialist_terms_for_requested_pair(self):
+        terms_path = Path(__file__).parent.parent / "skills" / "finance_terms.json"
+        self.assertEqual(
+            load_curated_terms(str(terms_path), "en_to_zh")["quantitative easing"],
+            "量化宽松",
+        )
+        self.assertEqual(
+            load_curated_terms(str(terms_path), "en_to_ja")["inflation"],
+            "インフレーション",
+        )
+        self.assertEqual(
+            load_curated_terms(str(terms_path), "zh_to_en")["通货膨胀"],
+            "inflation",
+        )
+
+    def test_matches_lowercase_curated_terms_that_are_not_proper_nouns(self):
+        matches = match_curated_terms(
+            "Inflation rose while quantitative easing was discussed.",
+            {
+                "inflation": "通货膨胀",
+                "quantitative easing": "量化宽松",
+            },
+        )
+        self.assertEqual(
+            matches,
+            {"inflation": "通货膨胀", "quantitative easing": "量化宽松"},
         )
 
     def test_formats_non_empty_glossary_for_document_prompt(self):

@@ -32,6 +32,7 @@ from document_translation import (
     format_glossary,
     load_curated_terms,
     looks_likely_truncated,
+    match_curated_terms,
     parse_glossary_response,
     plan_paragraph_chunks,
 )
@@ -47,6 +48,19 @@ console = Console()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILLS_DIR = os.path.join(BASE_DIR, "skills")
 NEWS_TERMS_FILE = os.path.join(SKILLS_DIR, "news_terms.json")
+TERM_FILES = (
+    (NEWS_TERMS_FILE, ()),
+    (os.path.join(SKILLS_DIR, "finance_terms.json"), ()),
+    (os.path.join(SKILLS_DIR, "stocks_terms.json"), ()),
+    (os.path.join(SKILLS_DIR, "tech_terms.json"), ()),
+    (
+        os.path.join(SKILLS_DIR, "blockchain_terms.json"),
+        (
+            "blockchain", "cryptocurrency", "Bitcoin", "Ethereum", "hash rate",
+            "mining rig", "proof of work", "smart contract", "decentralized finance",
+        ),
+    ),
+)
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 TEMP_DIR = tempfile.gettempdir()
 CLIPBOARD_OCR_PATH = os.path.join(TEMP_DIR, "ai_translator_clipboard_ocr.png")
@@ -563,17 +577,25 @@ class TranslatorCLI:
 
     def _build_document_glossary(self, text: str, pair_key: str):
         candidates = extract_term_candidates(text)
-        if not candidates:
-            return {}
-        try:
-            curated = load_curated_terms(NEWS_TERMS_FILE, pair_key)
-        except (OSError, ValueError, json.JSONDecodeError):
-            curated = {}
-
-        curated_only = parse_glossary_response("{}", candidates, curated)
-        unknown = tuple(term for term in candidates if term not in curated_only)
+        curated = {}
+        for terms_file, context_markers in TERM_FILES:
+            if context_markers and not match_curated_terms(
+                text,
+                {marker: marker for marker in context_markers},
+            ):
+                continue
+            try:
+                curated.update(load_curated_terms(terms_file, pair_key))
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+        curated_only = match_curated_terms(text, curated)
+        curated_only.update(parse_glossary_response("{}", candidates, curated))
+        curated_source_keys = {term.casefold() for term in curated_only}
+        unknown = tuple(
+            term for term in candidates if term.casefold() not in curated_source_keys
+        )
         if not unknown:
-            return curated_only
+            return parse_glossary_response("{}", tuple(curated_only), curated_only)
 
         request = (
             "Return one JSON object mapping every supplied source term to its "
@@ -591,9 +613,11 @@ class TranslatorCLI:
                 float(self.config.get("repeat_penalty", 1.08)),
                 min(1024, int(self.config.get("max_tokens", 4096))),
             )
-            return parse_glossary_response(result.text, candidates, curated)
+            planned = parse_glossary_response(result.text, unknown, {})
+            curated_only.update(planned)
+            return parse_glossary_response("{}", tuple(curated_only), curated_only)
         except Exception:
-            return curated_only
+            return parse_glossary_response("{}", tuple(curated_only), curated_only)
 
     def _confirm_truncated_input(self) -> bool:
         try:

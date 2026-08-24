@@ -130,6 +130,7 @@ Prompts and linguistic rules are modularized as standalone files under `skills/`
 - `skills/en_to_zh.md`: English-to-Chinese skill (clause restructuring, temporal/conditional pre-positioning).
 - `skills/zh_to_en.md`: Chinese-to-English skill (subject recovery, idiom meaning adaptation).
 - `skills/news_terms.json`: Curated news terminology used together with document-specific term planning.
+- `skills/finance_terms.json`, `stocks_terms.json`, `tech_terms.json`, `blockchain_terms.json`: Multilingual specialist terminology. The runtime selects only terms that occur in the document; ambiguous blockchain words require a blockchain context marker.
 
 You can edit any `.md` file in `skills/` directly with your preferred editor. Changes take effect on the very next translation without restarting the program.
 
@@ -173,6 +174,7 @@ ai-translator/
 │   ├── en_to_zh.md         # English -> Chinese skill
 │   ├── zh_to_en.md         # Chinese -> English skill
 │   └── news_terms.json     # Curated news terminology
+├── docs/terminology-sources.md # Public terminology references and contribution format
 ├── README.md               # English documentation
 ├── README_zh.md            # Chinese documentation
 └── LICENSE                 # Apache-2.0 license

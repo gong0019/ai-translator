@@ -245,6 +245,27 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertIn("第 1/2 段", status.call_args_list[0].args[0])
         self.assertIn("第 2/2 段", status.call_args_list[1].args[0])
 
+    def test_specialist_glossaries_match_lowercase_terms_and_skip_ambiguous_blockchain_words(self):
+        cli = self.make_cli(())
+        finance = cli._build_document_glossary(
+            "Inflation rose after quantitative easing.",
+            "en_to_zh",
+        )
+        ordinary_wallet = cli._build_document_glossary(
+            "The stolen wallet was returned to its owner.",
+            "en_to_zh",
+        )
+        crypto_wallet = cli._build_document_glossary(
+            "The Bitcoin wallet uses a smart contract.",
+            "en_to_zh",
+        )
+
+        self.assertEqual(finance["inflation"], "通货膨胀")
+        self.assertEqual(finance["quantitative easing"], "量化宽松")
+        self.assertNotIn("wallet", ordinary_wallet)
+        self.assertEqual(crypto_wallet["wallet"], "钱包")
+        self.assertEqual(cli.llm.calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()

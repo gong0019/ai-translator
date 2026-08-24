@@ -40,6 +40,20 @@ def extract_term_candidates(text: str) -> tuple[str, ...]:
 def load_curated_terms(path: str, pair_key: str) -> dict[str, str]:
     with open(path, encoding="utf-8") as terms_file:
         data = json.load(terms_file)
+    if isinstance(data.get("terms"), list):
+        try:
+            source_code, target_code = pair_key.split("_to_", 1)
+        except ValueError:
+            return {}
+        return {
+            record[source_code]: record[target_code]
+            for record in data["terms"]
+            if isinstance(record, dict)
+            and isinstance(record.get(source_code), str)
+            and isinstance(record.get(target_code), str)
+            and record[source_code].strip()
+            and record[target_code].strip()
+        }
     terms = data.get(pair_key, {})
     if not isinstance(terms, dict):
         return {}
@@ -48,6 +62,20 @@ def load_curated_terms(path: str, pair_key: str) -> dict[str, str]:
         for source, target in terms.items()
         if isinstance(source, str) and isinstance(target, str) and target.strip()
     }
+
+
+def match_curated_terms(text: str, terms: dict[str, str]) -> dict[str, str]:
+    """Return only curated entries that occur as complete source terms."""
+    matches = {}
+    for source, target in terms.items():
+        if not source:
+            continue
+        prefix = r"(?<!\w)" if source[:1].isalnum() else ""
+        suffix = r"(?!\w)" if source[-1:].isalnum() else ""
+        flags = re.IGNORECASE if source.isascii() else 0
+        if re.search(prefix + re.escape(source) + suffix, text, flags):
+            matches[source] = target
+    return matches
 
 
 def parse_glossary_response(

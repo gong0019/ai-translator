@@ -1,0 +1,14 @@
+{
+  "terms": [
+    {"en":"earnings per share","zh":"每股收益","ja":"1株当たり利益","ko":"주당순이익","de":"Gewinn je Aktie","fr":"bénéfice par action","es":"beneficio por acción","ru":"прибыль на акцию","it":"utile per azione"},
+    {"en":"price-to-earnings ratio","zh":"市盈率","ja":"株価収益率","ko":"주가수익비율","de":"Kurs-Gewinn-Verhältnis","fr":"ratio cours-bénéfice","es":"relación precio-beneficio","ru":"коэффициент цена/прибыль","it":"rapporto prezzo-utili"},
+    {"en":"market capitalization","zh":"市值","ja":"時価総額","ko":"시가총액","de":"Marktkapitalisierung","fr":"capitalisation boursière","es":"capitalización bursátil","ru":"рыночная капитализация","it":"capitalizzazione di mercato"},
+    {"en":"dividend yield","zh":"股息率","ja":"配当利回り","ko":"배당수익률","de":"Dividendenrendite","fr":"rendement du dividende","es":"rendimiento por dividendo","ru":"дивидендная доходность","it":"rendimento da dividendo"},
+    {"en":"share buyback","zh":"股票回购","ja":"自社株買い","ko":"자사주 매입","de":"Aktienrückkauf","fr":"rachat d’actions","es":"recompra de acciones","ru":"выкуп акций","it":"riacquisto di azioni"},
+    {"en":"initial public offering","zh":"首次公开募股","ja":"新規株式公開","ko":"기업공개","de":"Börsengang","fr":"introduction en bourse","es":"oferta pública inicial","ru":"первичное публичное размещение","it":"offerta pubblica iniziale"},
+    {"en":"short selling","zh":"卖空","ja":"空売り","ko":"공매도","de":"Leerverkauf","fr":"vente à découvert","es":"venta en corto","ru":"короткая продажа","it":"vendita allo scoperto"},
+    {"en":"bull market","zh":"牛市","ja":"強気相場","ko":"강세장","de":"Bullenmarkt","fr":"marché haussier","es":"mercado alcista","ru":"бычий рынок","it":"mercato rialzista"},
+    {"en":"bear market","zh":"熊市","ja":"弱気相場","ko":"약세장","de":"Bärenmarkt","fr":"marché baissier","es":"mercado bajista","ru":"медвежий рынок","it":"mercato ribassista"},
+    {"en":"insider trading","zh":"内幕交易","ja":"インサイダー取引","ko":"내부자 거래","de":"Insiderhandel","fr":"délit d’initié","es":"uso de información privilegiada","ru":"инсайдерская торговля","it":"insider trading"}
+  ]
+}

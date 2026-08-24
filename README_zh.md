@@ -130,6 +130,7 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | 
 - `skills/en_to_zh.md`：英译中专属 Skill（从句语法重构、时间与条件前置化、消除欧化倒装）。
 - `skills/zh_to_en.md`：中译英专属 Skill（主语智能补齐、成语隐喻意译）。
 - `skills/news_terms.json`：新闻常用固定术语，与当前文档动态规划的术语表共同使用。
+- `skills/finance_terms.json`、`stocks_terms.json`、`tech_terms.json`、`blockchain_terms.json`：金融经济、股票、计算机、区块链多语种术语库。程序只注入正文中命中的词条；`wallet`、`mining` 等歧义区块链词还要求命中区块链上下文。
 
 你可以使用任何文本编辑器随时修改 `skills/` 下的 `.md` 文件，**下次翻译时实时热加载生效，无需重启程序**。
 
@@ -173,6 +174,7 @@ ai-translator/
 │   ├── en_to_zh.md         # 英译中专项 Skill
 │   ├── zh_to_en.md         # 中译英专项 Skill
 │   └── news_terms.json     # 新闻固定术语表
+├── docs/terminology-sources.md # 公开术语参考来源与补充格式
 ├── README.md               # 英文说明文档
 ├── README_zh.md            # 中文说明文档
 └── LICENSE                 # Apache-2.0 开源协议
