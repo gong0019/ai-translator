@@ -96,7 +96,6 @@ Shortcuts: Ctrl+V (Smart Image/Text Paste) | /lang | /model | /sleep | /copy | /
 | **`/lang`** | Change target language (1: Chinese, 2: English, 3: Japanese, 4: Korean, 5: German, 6: French, etc.). |
 | **`/model`** | **Hot-switch Models**: Scans `models/` directory and lets you pick any installed GGUF model dynamically. |
 | **`/sleep`** or **`/unload`** | Manually unload model from RAM immediately (0 MB memory). |
-| **`/copy`** | Toggle auto-syncing translation results to system clipboard. |
 | **`/clear`** | Clear terminal screen and redraw status header. |
 | **`/quit`** or **`:q`** | Exit the program. |
 
@@ -130,6 +129,21 @@ Prompts and linguistic rules are modularized as standalone Markdown files under 
 
 You can edit any `.md` file in `skills/` directly with your preferred editor. Changes take effect on the very next translation without restarting the program.
 
+### Translation Quality Validation
+
+The translator buffers each model response before displaying it and checks observable defects: missing paragraphs or lines, reduced sentence count, changed Arabic numbers, missing English numeric expressions, and source-language residue in Chinese output. A failed first response triggers no more than one replacement generation at temperature `0.0`; the rejected response is never displayed.
+
+Configure the behavior in `config.json` or `~/.config/ai-translator/config.json`:
+
+```json
+{
+  "quality_validation": true,
+  "quality_retry_limit": 1
+}
+```
+
+`quality_validation` accepts only `true` or `false`. `quality_retry_limit` accepts only `0` or `1`. Invalid values resolve to `true` and `1`. Validation can detect specified structural and lexical defects, but it cannot mathematically prove semantic equivalence. Automatic clipboard copying remains disabled.
+
 ---
 
 ## 📂 Project Structure
@@ -142,6 +156,7 @@ ai-translator/
 ├── run.bat                 # Windows native launcher
 ├── requirements.txt        # Python dependency manifest
 ├── translator_cli.py       # Core CLI application (Universal GGUF)
+├── translation_quality.py  # Deterministic quality validation and one-retry policy
 ├── models/                 # Dynamic model storage (drop any .gguf file here)
 │   └── .gitkeep
 ├── skills/                 # Dynamic linguistic rule prompts

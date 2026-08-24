@@ -96,7 +96,6 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | 
 | **`/lang`** | 切换目标输出语言（1: 中文, 2: 英语, 3: 日语, 4: 韩语, 5: 德语, 6: 法语 等 9 大语种）。 |
 | **`/model`** | **热切换模型**：自动扫描 `models/` 目录并列出所有已下载的 GGUF 模型供自由切换。 |
 | **`/sleep`** 或 **`/unload`** | 立即手动休眠并释放模型内存（0 MB 占用）。 |
-| **`/copy`** | 开启 / 关闭自动同步写入系统剪贴板。 |
 | **`/clear`** | 清屏并重新绘制状态栏。 |
 | **`/quit`** 或 **`:q`** | 退出程序。 |
 
@@ -130,6 +129,21 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | 
 
 你可以使用任何文本编辑器随时修改 `skills/` 下的 `.md` 文件，**下次翻译时实时热加载生效，无需重启程序**。
 
+### 翻译质量校验
+
+程序会先完整缓存模型输出，再检查可观测错误：段落或行丢失、句子数量减少、阿拉伯数字变化、英文数量表达缺失，以及中文结果中的普通外文残留。首次结果不合格时，只允许使用温度 `0.0` 完整重译一次；被拒绝的首次结果不会显示。
+
+可在 `config.json` 或 `~/.config/ai-translator/config.json` 中配置：
+
+```json
+{
+  "quality_validation": true,
+  "quality_retry_limit": 1
+}
+```
+
+`quality_validation` 只接受 `true` 或 `false`；`quality_retry_limit` 只接受 `0` 或 `1`。其他值固定回退为 `true` 和 `1`。质量校验可以识别上述结构与文字错误，但不能从数学上证明任意译文与原文语义完全等价。自动复制到剪贴板仍保持关闭。
+
 ---
 
 ## 📂 仓库目录结构
@@ -142,6 +156,7 @@ ai-translator/
 ├── run.bat                 # Windows 原生启动入口
 ├── requirements.txt        # Python 依赖清单
 ├── translator_cli.py       # 核心程序（通用 GGUF 引擎，动态发现模型）
+├── translation_quality.py  # 确定性质量校验与单次重译策略
 ├── models/                 # 模型存储目录（随放任意 .gguf 模型）
 │   └── .gitkeep
 ├── skills/                 # 核心提示词与多语种专项规则库
