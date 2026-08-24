@@ -27,6 +27,12 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
 from prompt_toolkit.key_binding import KeyBindings
 from llama_cpp import Llama
+from translation_quality import (
+    CompletionResult,
+    normalize_quality_settings,
+    normalize_source_structure,
+    run_quality_checked_completion,
+)
 
 console = Console()
 
@@ -70,7 +76,9 @@ DEFAULT_CONFIG = {
     "n_ctx": 8192,
     "temperature": 0.1,
     "repeat_penalty": 1.08,
-    "max_tokens": 4096
+    "max_tokens": 4096,
+    "quality_validation": True,
+    "quality_retry_limit": 1,
 }
 
 def get_optimal_threads():
@@ -318,6 +326,13 @@ class TranslatorCLI:
                     self.config.update(data)
             except Exception:
                 pass
+
+        validation_enabled, retry_limit = normalize_quality_settings(
+            self.config.get("quality_validation"),
+            self.config.get("quality_retry_limit"),
+        )
+        self.config["quality_validation"] = validation_enabled
+        self.config["quality_retry_limit"] = retry_limit
 
     def save_config(self):
         """双重原子落盘保存配置 (通过 fsync 确保窗口被杀死时依然物理持久化)"""
@@ -590,27 +605,61 @@ class TranslatorCLI:
         
         self.stream_translate(ocr_text)
 
+    def _collect_completion(
+        self,
+        messages,
+        temperature,
+        repeat_penalty,
+        max_tokens,
+    ):
+        """Collect a complete model result without exposing unvalidated tokens."""
+        stream = self.llm.create_chat_completion(
+            messages=messages,
+            temperature=temperature,
+            repeat_penalty=repeat_penalty,
+            max_tokens=max_tokens,
+            stream=True,
+        )
+        text = ""
+        finish_reason = None
+        for chunk in stream:
+            choices = chunk.get("choices", [])
+            if not choices:
+                continue
+            choice = choices[0]
+            token = choice.get("delta", {}).get("content", "")
+            if token:
+                text += token
+            if choice.get("finish_reason") is not None:
+                finish_reason = choice["finish_reason"]
+        return CompletionResult(
+            text=text.strip(),
+            truncated=finish_reason == "length",
+        )
+
     def stream_translate(self, text: str):
         self.ensure_engine()
         with self.lock:
             self.is_busy = True
 
-        full_translation = ""
         start_time = time.time()
 
         temperature = float(self.config.get("temperature", 0.1))
         repeat_penalty = float(self.config.get("repeat_penalty", 1.08))
         max_tokens = int(self.config.get("max_tokens", 4096))
+        validation_enabled, retry_limit = normalize_quality_settings(
+            self.config.get("quality_validation"),
+            self.config.get("quality_retry_limit"),
+        )
 
         try:
-            # 强化自然段正则切分（容忍包含空格/制表符的空行）
-            raw_paragraphs = re.split(r'\n\s*\n', text)
+            normalized_text = normalize_source_structure(text)
+            raw_paragraphs = re.split(r'\n\s*\n', normalized_text)
             paragraphs = [p.strip() for p in raw_paragraphs if p.strip()]
 
             if not paragraphs:
-                paragraphs = [text.strip()]
+                paragraphs = [normalized_text.strip()]
 
-            _, first_source, first_target = self.build_dynamic_prompt(paragraphs[0])
             console.print()
             console.rule(f"[bold green]Translation ➔ {self.target_lang_display}[/]", style="green")
 
@@ -618,39 +667,42 @@ class TranslatorCLI:
                 if not p:
                     continue
 
-                # 每一段独立嗅探源语言并精准路由对应 Skill
-                system_prompt, _, _ = self.build_dynamic_prompt(p)
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": p}
-                ]
-
-                stream = self.llm.create_chat_completion(
-                    messages=messages,
+                system_prompt, _, resolved_target_name = self.build_dynamic_prompt(p)
+                resolved_target_code = next(
+                    (
+                        code
+                        for code, item in CODE_TO_LANG.items()
+                        if item["en"] == resolved_target_name
+                    ),
+                    self.target_lang_item["code"],
+                )
+                outcome = run_quality_checked_completion(
+                    source=p,
+                    target_code=resolved_target_code,
+                    system_prompt=system_prompt,
+                    complete=lambda messages, attempt_temperature: self._collect_completion(
+                        messages,
+                        attempt_temperature,
+                        repeat_penalty,
+                        max_tokens,
+                    ),
                     temperature=temperature,
-                    repeat_penalty=repeat_penalty,
-                    max_tokens=max_tokens,
-                    stream=True
+                    retry_limit=retry_limit,
+                    validation_enabled=validation_enabled,
                 )
 
-                chunk_text = ""
-                for chunk in stream:
-                    delta = chunk['choices'][0].get('delta', {})
-                    token = delta.get('content', '')
-                    if token:
-                        chunk_text += token
-                        sys.stdout.write(token)
-                        sys.stdout.flush()
-
-                full_translation += chunk_text
+                sys.stdout.write(outcome.text)
                 if i < len(paragraphs) - 1:
                     sys.stdout.write('\n\n')
-                    sys.stdout.flush()
-                    full_translation += '\n\n'
+                elif not outcome.text.endswith('\n'):
+                    sys.stdout.write('\n')
+                sys.stdout.flush()
 
-            if not full_translation.endswith('\n'):
-                sys.stdout.write('\n')
-            sys.stdout.flush()
+                if outcome.errors:
+                    error_list = ", ".join(outcome.errors)
+                    console.print(
+                        f"[bold yellow]⚠ 质量校验未完全通过: {error_list}[/]"
+                    )
 
             console.rule("[dim green]END[/]", style="green")
 

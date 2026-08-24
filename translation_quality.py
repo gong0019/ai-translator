@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
+from typing import Callable
 
 
 _SENTENCE_FINAL = tuple(".!?。！？:：;；")
@@ -95,6 +97,19 @@ _MAGNITUDE_EQUIVALENTS = {
     "million": ("百万",),
     "billion": ("十亿",),
 }
+
+
+@dataclass(frozen=True)
+class CompletionResult:
+    text: str
+    truncated: bool = False
+
+
+@dataclass(frozen=True)
+class QualityOutcome:
+    text: str
+    errors: tuple[str, ...]
+    retried: bool
 
 
 def _begins_structural_line(line: str) -> bool:
@@ -291,3 +306,94 @@ def validate_translation(source: str, output: str, target_code: str) -> list[str
             errors.append("TARGET_SCRIPT_RESIDUAL")
 
     return errors
+
+
+def normalize_quality_settings(
+    validation_value: object,
+    retry_value: object,
+) -> tuple[bool, int]:
+    """Accept only JSON-compatible booleans and integer retry limits."""
+    validation_enabled = validation_value if type(validation_value) is bool else True
+    retry_limit = (
+        retry_value
+        if type(retry_value) is int and retry_value in (0, 1)
+        else 1
+    )
+    return validation_enabled, retry_limit
+
+
+def _validation_errors(
+    source: str,
+    result: CompletionResult,
+    target_code: str,
+) -> tuple[str, ...]:
+    errors = validate_translation(source, result.text, target_code)
+    if result.truncated and "OUTPUT_TRUNCATED" not in errors:
+        errors.append("OUTPUT_TRUNCATED")
+    return tuple(errors)
+
+
+def _repair_messages(
+    system_prompt: str,
+    source: str,
+    rejected: str,
+    errors: tuple[str, ...],
+) -> list[dict[str, str]]:
+    repair_request = (
+        "The previous translation failed deterministic validation.\n"
+        f"ERROR_CODES: {', '.join(errors)}\n\n"
+        "SOURCE_TEXT:\n"
+        f"{source}\n\n"
+        "REJECTED_TRANSLATION:\n"
+        f"{rejected}\n\n"
+        "Return one complete replacement translation. "
+        "Do not return a patch, explanation, or analysis."
+    )
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": repair_request},
+    ]
+
+
+def run_quality_checked_completion(
+    source: str,
+    target_code: str,
+    system_prompt: str,
+    complete: Callable[[list[dict[str, str]], float], CompletionResult],
+    temperature: float,
+    retry_limit: int,
+    validation_enabled: bool = True,
+) -> QualityOutcome:
+    """Generate, validate, and perform no more than one repair attempt."""
+    first_messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": source},
+    ]
+    first_result = complete(first_messages, temperature)
+    if not validation_enabled:
+        return QualityOutcome(first_result.text, (), False)
+
+    try:
+        first_errors = _validation_errors(source, first_result, target_code)
+    except Exception:
+        return QualityOutcome(first_result.text, ("VALIDATOR_ERROR",), False)
+
+    if not first_errors:
+        return QualityOutcome(first_result.text, (), False)
+    if retry_limit != 1:
+        return QualityOutcome(first_result.text, first_errors, False)
+
+    second_result = complete(
+        _repair_messages(
+            system_prompt,
+            source,
+            first_result.text,
+            first_errors,
+        ),
+        0.0,
+    )
+    try:
+        second_errors = _validation_errors(source, second_result, target_code)
+    except Exception:
+        return QualityOutcome(second_result.text, ("VALIDATOR_ERROR",), True)
+    return QualityOutcome(second_result.text, second_errors, True)
