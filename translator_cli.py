@@ -4,7 +4,7 @@
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
 Architecture: Python Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: Persistent Config (config.json), Dynamic Model Discovery, 1-Min Auto-Idle Sleep, Smart OCR
+Features: Persistent Config (config.json), Fixed Bottom Status Toolbar & Live Header Sync, Dynamic Model Discovery
 """
 
 import os
@@ -158,10 +158,10 @@ class TranslatorCLI:
         self.llm = None
         self.lock = threading.Lock()
 
-        # 读取用户持久化配置 (config.json)
+        # 读取持久化配置 (config.json)
         self.load_config()
 
-        # 动态扫描 models/*.gguf 模型并激活记忆的模型
+        # 动态扫描 models/*.gguf 模型
         self.models_map = {}
         self.active_model_idx = "1"
         self.refresh_available_models()
@@ -192,9 +192,23 @@ class TranslatorCLI:
                 except Exception:
                     pass
 
+        # 底部常驻状态栏 (Fixed Bottom Toolbar)
+        def get_bottom_toolbar():
+            engine_status = "[Active]" if self.llm is not None else "[0 MB Sleep]"
+            copy_status = "ON" if self.auto_copy else "OFF"
+            model_disp = self.get_current_model_name()
+            lang_disp = self.target_lang_display
+            return HTML(
+                f" <style bg='#1a1a24' fg='#00d7af'><b>Target:</b></style> {lang_disp} | "
+                f"<style bg='#1a1a24' fg='#00afff'><b>Model:</b></style> {model_disp} {engine_status} | "
+                f"<style bg='#1a1a24' fg='#ffd700'><b>Copy:</b></style> {copy_status} | "
+                f"<style fg='#777777'>/model /lang /copy /sleep /clear /quit</style> "
+            )
+
         self.session = PromptSession(
             multiline=True,
             key_bindings=self.kb,
+            bottom_toolbar=get_bottom_toolbar,
             enable_history_search=True
         )
 
@@ -252,7 +266,7 @@ class TranslatorCLI:
             }
             idx += 1
 
-        # 优先使用 config.json 中记忆的模型
+        # 1. 优先定位 config.json 中保存的模型文件名
         found_saved = False
         if self.saved_model_filename:
             for k, info in self.models_map.items():
@@ -261,7 +275,7 @@ class TranslatorCLI:
                     found_saved = True
                     break
 
-        # 若无记忆或记忆文件已删除，默认优先 3B -> 1.5B -> 7B
+        # 2. 若无保存记录，则按优先级默认：3B -> 1.5B -> 7B
         if not found_saved:
             found_pref = False
             for pref in ["3b", "1.5b", "7b"]:
@@ -296,7 +310,6 @@ class TranslatorCLI:
         return "未加载模型 (No Model)"
 
     def init_engine(self, silent=False):
-        self.refresh_available_models()
         model_path = self.get_current_model_path()
         
         if not model_path or not os.path.exists(model_path):
@@ -416,8 +429,13 @@ class TranslatorCLI:
             if choice in self.models_map and choice != self.active_model_idx:
                 with self.lock:
                     self.active_model_idx = choice
-                    self.init_engine()
-                    self.save_config()  # 立即持久化记忆选择
+                    self.saved_model_filename = self.models_map[choice]["filename"]
+                    self.save_config()  # 立即保存新模型偏好
+                    self._load_llama(self.models_map[choice]["path"])
+                    self.last_active_time = time.time()
+                
+                console.clear()
+                self.print_header()
                 console.print(f"\n[bold green]✓ 成功切换模型为:[/] [yellow]{self.get_current_model_name()}[/] [dim](已保存偏好)[/]\n")
             elif choice == self.active_model_idx:
                 console.print("[dim]保持当前模型不变。[/]\n")
@@ -436,7 +454,9 @@ class TranslatorCLI:
             choice = input("\n请输入语言编号 [1-9]: ").strip()
             if choice in LANGUAGES:
                 self.target_lang_key = choice
-                self.save_config()  # 立即持久化记忆选择
+                self.save_config()  # 立即保存新语言偏好
+                console.clear()
+                self.print_header()
                 console.print(f"\n[bold green]✓ 输出语言已变更为:[/] [yellow]{self.target_lang_display}[/] [dim](已保存偏好)[/]\n")
             else:
                 console.print("[bold red]❌ 输入无效，保持原有设置[/]\n")
@@ -445,7 +465,9 @@ class TranslatorCLI:
 
     def toggle_copy(self):
         self.auto_copy = not self.auto_copy
-        self.save_config()  # 立即持久化记忆选择
+        self.save_config()  # 立即保存剪贴板偏好
+        console.clear()
+        self.print_header()
         status = "[green]开启 (ON)[/]" if self.auto_copy else "[red]关闭 (OFF)[/]"
         console.print(f"\n[bold green]✓ 译文自动同步剪贴板:[/] {status} [dim](已保存偏好)[/]\n")
 
@@ -560,6 +582,7 @@ class TranslatorCLI:
                     self.switch_lang()
                     continue
                 elif user_input in ["/config", "/settings"]:
+                    console.clear()
                     self.print_header()
                     continue
                 elif user_input == "/copy":
