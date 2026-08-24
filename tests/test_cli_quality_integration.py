@@ -120,6 +120,9 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertNotIn("翻译单元未通过质量校验", rendered)
         self.assertNotIn("TARGET_SCRIPT_RESIDUAL", rendered)
         self.assertNotIn("ENGLISH_NUMBER_MISMATCH", rendered)
+        self.assertNotIn("可能仍有未翻译内容", rendered)
+        self.assertNotIn("可能存在结构或内容缺失", rendered)
+        self.assertNotIn("可能存在数字不一致", rendered)
         self.assertEqual(len(cli.llm.calls), 3)
 
     def test_short_document_uses_one_glossary_and_one_translation_request(self):

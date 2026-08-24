@@ -743,8 +743,6 @@ class TranslatorCLI:
                 self._count_tokens,
                 max_source_tokens,
             )
-            review_notes = []
-
             console.print()
             console.rule(f"[bold green]Translation ➔ {self.target_lang_display}[/]", style="green")
 
@@ -770,14 +768,9 @@ class TranslatorCLI:
                 if not outcome.text.endswith("\n"):
                     sys.stdout.write("\n")
                 sys.stdout.flush()
-                review_notes.extend(outcome.review_notes)
-
                 if chunk_index < len(chunks) - 1:
                     sys.stdout.write("\n")
                     sys.stdout.flush()
-
-            for note in dict.fromkeys(review_notes):
-                console.print(f"[yellow]⚠ {note}[/]")
 
             console.rule("[dim green]END[/]", style="green")
 

@@ -137,7 +137,7 @@ You can edit any `.md` file in `skills/` directly with your preferred editor. Ch
 
 For news and other multi-paragraph input, short documents are translated as one unit while longer documents are split only at paragraph boundaries. A document glossary is planned once and shared across every chunk so names, places, institutions, and recurring terms stay consistent. The translator also detects likely truncated input and asks for confirmation instead of silently inventing an ending.
 
-Each response is checked for observable defects such as omitted structure, changed quantities, missing terms, and inappropriate source-language residue. Only a defective chunk is retried, at most once and at temperature `0.0`. The final translation is always shown; internal validator codes are never printed. If a defect remains, the user sees a concrete review note describing what to check. These safeguards improve accuracy but may make long-document translation roughly 1.5–2× slower, and they cannot mathematically prove semantic equivalence.
+Each response is checked for observable defects such as omitted structure, changed quantities, missing terms, and inappropriate source-language residue. Only a defective chunk is retried, at most once and at temperature `0.0`. The final translation is always shown; validator codes and review warnings stay out of normal terminal output. These safeguards improve accuracy but may make long-document translation roughly 1.5–2× slower, and they cannot mathematically prove semantic equivalence.
 
 Configure the behavior in `config.json` or `~/.config/ai-translator/config.json`:
 
