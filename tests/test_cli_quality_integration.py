@@ -71,6 +71,47 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertEqual(len(cli.llm.calls), 2)
         self.assertEqual(cli.llm.calls[1]["temperature"], 0.0)
 
+    def test_stream_translate_translates_headline_and_body_as_separate_units(self):
+        cli = self.make_cli(
+            (
+                ("“惊恐万分”：野火蔓延，数千人撤离内华达州家园", "stop"),
+                (
+                    "美国内华达州数以万计的居民被要求撤离家园，"
+                    "因为一场野火逼近里诺市。",
+                    "stop",
+                ),
+            )
+        )
+        source = (
+            "'Scared to death': Thousands evacuate Nevada homes as wildfire spreads\n"
+            "Tens of thousands of people in Nevada were told to evacuate "
+            "as a wildfire approached Reno."
+        )
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            cli.stream_translate(source)
+        rendered = output.getvalue()
+        self.assertIn("“惊恐万分”：野火蔓延，数千人撤离内华达州家园", rendered)
+        self.assertIn("数以万计", rendered)
+        self.assertNotIn("质量校验未完全通过", rendered)
+        self.assertEqual(len(cli.llm.calls), 2)
+
+    def test_stream_translate_never_prints_second_failed_attempt(self):
+        cli = self.make_cli(
+            (
+                ("Six people受伤。", "stop"),
+                ("authorities称Six people受伤。", "stop"),
+            )
+        )
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            cli.stream_translate("Six people were injured.")
+        rendered = output.getvalue()
+        self.assertNotIn("Six people受伤。", rendered)
+        self.assertNotIn("authorities称Six people受伤。", rendered)
+        self.assertIn("翻译单元未通过质量校验", rendered)
+        self.assertEqual(len(cli.llm.calls), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

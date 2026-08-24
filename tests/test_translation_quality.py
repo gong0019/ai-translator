@@ -10,6 +10,12 @@ class SourceNormalizationTests(unittest.TestCase):
             "approached Reno.",
         )
 
+    def test_repairs_suffix_split_by_terminal_wrap(self):
+        self.assertEqual(
+            normalize_source_structure("weather contribut\ning to the spread."),
+            "weather contributing to the spread.",
+        )
+
     def test_joins_lowercase_soft_continuation(self):
         self.assertEqual(
             normalize_source_structure("the fire\ncontinued spreading."),

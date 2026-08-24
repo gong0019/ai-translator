@@ -11,6 +11,23 @@ _SENTENCE_FINAL = tuple(".!?。！？:：;；")
 _STRUCTURAL_PREFIX = re.compile(
     r"^(?:[#>*+-]\s|\d+[.)]\s|[-+*]\s|[\"'“‘（(\[]|[A-ZÀ-Þ])"
 )
+_WORD_WRAP_SUFFIXES = {
+    "able",
+    "al",
+    "ed",
+    "er",
+    "est",
+    "ible",
+    "ing",
+    "ion",
+    "ive",
+    "ly",
+    "ment",
+    "ness",
+    "ous",
+    "s",
+    "tion",
+}
 _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
 _ARABIC_NUMBER = re.compile(r"(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?")
 _LATIN_TOKEN = re.compile(r"[A-Za-z]+")
@@ -117,13 +134,15 @@ def _begins_structural_line(line: str) -> bool:
 
 
 def _ends_inside_word(previous: str, current: str) -> bool:
-    """Recognize the narrow single-letter wrap seen in terminal captures."""
+    """Recognize single-letter prefixes and standalone suffix wrap fragments."""
     previous_match = re.search(r"([a-z])$", previous)
     current_match = re.match(r"([a-z]+)", current.lstrip())
     if not previous_match or not current_match:
         return False
     previous_token = re.search(r"([A-Za-z]+)$", previous)
-    return bool(previous_token and len(previous_token.group(1)) == 1)
+    if previous_token and len(previous_token.group(1)) == 1:
+        return True
+    return current_match.group(1).lower() in _WORD_WRAP_SUFFIXES
 
 
 def _begins_lowercase_continuation(line: str) -> bool:

@@ -663,46 +663,54 @@ class TranslatorCLI:
             console.print()
             console.rule(f"[bold green]Translation ➔ {self.target_lang_display}[/]", style="green")
 
-            for i, p in enumerate(paragraphs):
-                if not p:
-                    continue
-
-                system_prompt, _, resolved_target_name = self.build_dynamic_prompt(p)
-                resolved_target_code = next(
-                    (
-                        code
-                        for code, item in CODE_TO_LANG.items()
-                        if item["en"] == resolved_target_name
-                    ),
-                    self.target_lang_item["code"],
-                )
-                outcome = run_quality_checked_completion(
-                    source=p,
-                    target_code=resolved_target_code,
-                    system_prompt=system_prompt,
-                    complete=lambda messages, attempt_temperature: self._collect_completion(
-                        messages,
-                        attempt_temperature,
-                        repeat_penalty,
-                        max_tokens,
-                    ),
-                    temperature=temperature,
-                    retry_limit=retry_limit,
-                    validation_enabled=validation_enabled,
-                )
-
-                sys.stdout.write(outcome.text)
-                if i < len(paragraphs) - 1:
-                    sys.stdout.write('\n\n')
-                elif not outcome.text.endswith('\n'):
-                    sys.stdout.write('\n')
-                sys.stdout.flush()
-
-                if outcome.errors:
-                    error_list = ", ".join(outcome.errors)
-                    console.print(
-                        f"[bold yellow]⚠ 质量校验未完全通过: {error_list}[/]"
+            for paragraph_index, paragraph in enumerate(paragraphs):
+                units = [line.strip() for line in paragraph.splitlines() if line.strip()]
+                for unit in units:
+                    system_prompt, _, resolved_target_name = self.build_dynamic_prompt(unit)
+                    resolved_target_code = next(
+                        (
+                            code
+                            for code, item in CODE_TO_LANG.items()
+                            if item["en"] == resolved_target_name
+                        ),
+                        self.target_lang_item["code"],
                     )
+                    outcome = run_quality_checked_completion(
+                        source=unit,
+                        target_code=resolved_target_code,
+                        system_prompt=system_prompt,
+                        complete=lambda messages, attempt_temperature: self._collect_completion(
+                            messages,
+                            attempt_temperature,
+                            repeat_penalty,
+                            max_tokens,
+                        ),
+                        temperature=temperature,
+                        retry_limit=retry_limit,
+                        validation_enabled=validation_enabled,
+                    )
+
+                    if outcome.errors and outcome.errors != ("VALIDATOR_ERROR",):
+                        error_list = ", ".join(outcome.errors)
+                        console.print(
+                            "[bold red]❌ 翻译单元未通过质量校验，"
+                            f"未显示不合格译文: {error_list}[/]"
+                        )
+                        continue
+
+                    sys.stdout.write(outcome.text)
+                    if not outcome.text.endswith("\n"):
+                        sys.stdout.write("\n")
+                    sys.stdout.flush()
+                    if outcome.errors == ("VALIDATOR_ERROR",):
+                        console.print(
+                            "[bold yellow]⚠ 校验器执行失败，已保留模型输出: "
+                            "VALIDATOR_ERROR[/]"
+                        )
+
+                if paragraph_index < len(paragraphs) - 1:
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
 
             console.rule("[dim green]END[/]", style="green")
 
