@@ -4,7 +4,7 @@
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
 Architecture: Fast Multi-Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: 24 Specialized Linguistic Skills, Regex Paragraph Chunker, Native Script Anchoring
+Features: 24 Specialized Linguistic Skills, Physical CPU Thread Optimizer, Regex Chunker
 """
 
 import os
@@ -40,7 +40,7 @@ USER_CONFIG_DIR = os.path.expanduser("~/.config/ai-translator") if os.name != 'n
 USER_CONFIG_FILE = os.path.join(USER_CONFIG_DIR, "config.json")
 LOCAL_CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
-# 9 大支持语种定义（含原生文字与英文名映射）
+# 9 大支持语种定义
 LANGUAGES = {
     "1": {"zh": "中文", "en": "Simplified Chinese (简体中文)", "code": "zh", "flag": "🇨🇳", "ocr": "chi_sim"},
     "2": {"zh": "英语", "en": "English", "code": "en", "flag": "🇬🇧", "ocr": "eng"},
@@ -73,6 +73,15 @@ DEFAULT_CONFIG = {
     "repeat_penalty": 1.08,
     "max_tokens": 4096
 }
+
+def get_optimal_threads():
+    """获取最适合矩阵计算的物理核心数（避免超线程 L1/L2 缓存抖动）"""
+    count = os.cpu_count() or 4
+    if count >= 8:
+        return count // 2  # 8 逻辑核 -> 4 物理核心
+    elif count >= 4:
+        return 4
+    return count
 
 def load_skill(skill_name: str) -> str:
     """从 skills/ 目录动态读取单独的 skill markdown 文件"""
@@ -418,10 +427,11 @@ class TranslatorCLI:
             gc.collect()
         
         n_ctx = int(self.config.get("n_ctx", 8192))
+        optimal_threads = get_optimal_threads()
         self.llm = Llama(
             model_path=model_path,
             n_ctx=n_ctx,
-            n_threads=os.cpu_count() or 4,
+            n_threads=optimal_threads,
             verbose=False
         )
 
@@ -485,7 +495,6 @@ class TranslatorCLI:
         if not base_template:
             base_template = "You are a professional {source_name}-to-{target_name} translator.\nTASK: Translate the user's input text into {target_name}."
         
-        # 显式注入确定性的源语言与目标语言（含原生脚本提示）
         base_prompt = base_template.replace("{source_name}", source_name).replace("{target_name}", target_name)
         
         # 拼接专属专项 Skill
