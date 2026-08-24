@@ -1,9 +1,9 @@
 <div align="center">
 
-# 🌐 Qwen Terminal Translator (AI Translator)
+# 🌐 AI Terminal Translator (AI 终端翻译器)
 
-**A lightning-fast, local-first AI terminal translator powered by Qwen2.5 (3B / 1.5B) and llama.cpp.**  
-*Featuring Claude Code CLI aesthetic, dynamic multi-language skill routing, instant clipboard OCR, and 1-minute auto-idle memory release (0 MB idle footprint).*
+**A lightning-fast, local-first universal AI terminal translator powered by llama.cpp and any GGUF model (Qwen2.5, DeepSeek-R1, Llama-3.2, Mistral, etc.).**  
+*Featuring Claude Code CLI aesthetic, dynamic multi-language skill routing, instant clipboard OCR, dynamic model auto-discovery, and 1-minute auto-idle memory release (0 MB idle footprint).*
 
 ---
 
@@ -16,12 +16,13 @@
 ## 🌟 Highlights
 
 - ⚡ **Local & Privacy-First**: 100% runs on your local CPU or GPU using optimized C++ inference (`llama.cpp`). Zero cloud API fees, zero data tracking.
+- 🧩 **Universal GGUF Engine**: Auto-discovers and hot-switches between **any GGUF model** (Qwen2.5, DeepSeek, Llama-3, Gemma-2, Mistral) simply by dropping them into `models/`.
 - 🧠 **Dynamic Skill-Based Routing**: Python detects source language instantly and dynamically injects specialized translation rules (e.g., Japanese negation protection, English clause de-inversion, Chinese subject recovery).
 - 📷 **Smart Screenshot OCR (`Ctrl+V`)**: Press `Ctrl+V` to automatically capture clipboard images, extract text via local Tesseract OCR while preserving spatial layouts, and translate line-by-line.
 - 💤 **1-Minute Auto-Sleep (0 MB Footprint)**: Automatically unloads model weights after 60 seconds of inactivity to keep your system memory clean (0 MB RAM). Instantly wakes up in ~0.3s on new input, with active-lock protection during long text translations.
 - 📋 **Auto Clipboard Sync**: Translations are automatically synced to the system clipboard upon completion.
 - 🧼 **Clean Output**: Borderless horizontal rule dividers—no side pipe `│` characters. Copy text cleanly without formatting artifacts.
-- 🚀 **One-Click Automated Installer & Uninstaller**: Includes TUI model multi-selection, domestic/global mirror routing, anti-sudo permission isolation, and clean uninstallation.
+- 🚀 **One-Click Automated Installer & Uninstaller**: Includes TUI model selection, domestic/global mirror routing, anti-sudo permission isolation, and clean uninstallation.
 
 ---
 
@@ -42,9 +43,9 @@ chmod +x install.sh
 > 1. Detects network region and auto-switches between global PyPI/HuggingFace and domestic mirrors (Aliyun / HF-Mirror).
 > 2. Installs required system packages (`tesseract-ocr`, `cmake`, `xclip`/`wl-clipboard`).
 > 3. Sets up an isolated Python virtual environment (`.venv/`) with anti-sudo privilege separation.
-> 4. Launches an interactive TUI checklist for model selection (`[Space]` to select, `[Enter]` to confirm).
+> 4. Launches an interactive TUI checklist for recommended model selection (`[Space]` to select, `[Enter]` to confirm).
 > 5. Detects your OS desktop directory (`~/Desktop`, `~/桌面`, Windows WSL desktop) and creates double-clickable launchers.
-> 6. Optionally adds `qwen-trans` to your system terminal `$PATH`.
+> 6. Adds `ai-trans` (and `qwen-trans`) to your system terminal `$PATH`.
 
 ### 2. Clean Uninstallation
 
@@ -62,6 +63,8 @@ chmod +x uninstall.sh
 Start the translator from anywhere:
 
 ```bash
+ai-trans
+# or
 qwen-trans
 # or directly run
 ./run.sh
@@ -70,11 +73,11 @@ qwen-trans
 ### Interactive CLI Interface
 
 ```text
-╭───────────────────────────────────────────────────────────────────╮
-│  🌐 Qwen Terminal Translator (Skill-Based Architecture)           │
-│  Input: 🔍 Auto Language Sniffer ➔ Target: 🇨🇳 Simplified Chinese  │
-│  Model: Qwen2.5-3B (High Accuracy) | AutoSleep: 1m | AutoCopy: ON │
-╰───────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────╮
+│  🌐 AI Terminal Translator (Universal GGUF Engine)                    │
+│  Input: 🔍 Auto Language Sniffer ➔ Target: 🇨🇳 Simplified Chinese      │
+│  Model: Qwen2.5 3B (Q4_K_M) [2.0GB] | AutoSleep: 1m | AutoCopy: ON    │
+╰───────────────────────────────────────────────────────────────────────╯
 Shortcuts: Ctrl+V (Smart Image/Text Paste) | /lang | /model | /sleep | /copy | /quit
 
 [auto➔zh] > Missing one day of practice is less discouraging when the goal is to continue over a long period rather than to perform perfectly every day.
@@ -91,7 +94,7 @@ Shortcuts: Ctrl+V (Smart Image/Text Paste) | /lang | /model | /sleep | /copy | /
 | :--- | :--- |
 | **`Ctrl+V`** | **Smart Paste**: Automatically extracts image text via OCR if clipboard contains a screenshot; pastes text otherwise. |
 | **`/lang`** | Change target language (1: Chinese, 2: English, 3: Japanese, 4: Korean, 5: German, 6: French, etc.). |
-| **`/model`** | Hot-switch between local models (e.g. `3B` High-Accuracy vs `1.5B` Fast). |
+| **`/model`** | **Hot-switch Models**: Scans `models/` directory and lets you pick any installed GGUF model dynamically. |
 | **`/sleep`** or **`/unload`** | Manually unload model from RAM immediately (0 MB memory). |
 | **`/copy`** | Toggle auto-syncing translation results to system clipboard. |
 | **`/clear`** | Clear terminal screen and redraw status header. |
@@ -99,27 +102,20 @@ Shortcuts: Ctrl+V (Smart Image/Text Paste) | /lang | /model | /sleep | /copy | /
 
 ---
 
-## 🧩 How to Add Custom Models
+## 🧩 How to Add Any Custom Model (Zero-Code Dynamic Discovery)
 
-You can download any GGUF quantized model (e.g., Qwen2.5-7B, DeepSeek-R1-Distill-Qwen, Llama-3.1) and use it with the translator.
+This tool supports **any GGUF quantized model** (Qwen, DeepSeek-R1, Llama-3, Gemma-2, Mistral, etc.).
 
-1. **Download GGUF model** into the `models/` directory:
+1. **Simply download any `.gguf` file** into the `models/` directory:
    ```bash
-   # Example: Download Qwen2.5-7B-Instruct GGUF
-   wget -c -P models/ "https://hf-mirror.com/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf"
+   # Example: Download DeepSeek-R1-Distill-Qwen-7B
+   wget -c -P models/ "https://hf-mirror.com/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+
+   # Or download Llama-3.2-3B
+   wget -c -P models/ "https://hf-mirror.com/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
    ```
 
-2. **Register the model** in `translator_cli.py`:
-   Open `translator_cli.py` and add your model to the `MODELS` dictionary:
-   ```python
-   MODELS = {
-       "1": ("Qwen2.5-3B (Recommended)", "qwen2.5-3b-instruct-q4_k_m.gguf", 3),
-       "2": ("Qwen2.5-1.5B (Lightweight)", "qwen2.5-1.5b-instruct-q4_k_m.gguf", 1.5),
-       "3": ("Qwen2.5-7B (Flagship Quality)", "qwen2.5-7b-instruct-q4_k_m.gguf", 7), # <- Add here
-   }
-   ```
-
-3. Launch the translator and type `/model` to switch to your new model!
+2. **That's it!** Launch the translator and type **`/model`**—the new model will be automatically discovered and listed for one-click switching!
 
 ---
 
@@ -145,8 +141,8 @@ ai-translator/
 ├── run.sh                  # Application launcher (.venv aware)
 ├── run.bat                 # Windows native launcher
 ├── requirements.txt        # Python dependency manifest
-├── translator_cli.py       # Core CLI application
-├── models/                 # Model storage (.gguf files, ignored by git)
+├── translator_cli.py       # Core CLI application (Universal GGUF)
+├── models/                 # Dynamic model storage (drop any .gguf file here)
 │   └── .gitkeep
 ├── skills/                 # Dynamic linguistic rule prompts
 │   ├── base.md             # Base translation rules

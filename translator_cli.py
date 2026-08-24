@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Qwen Terminal Translator (Claude Code CLI Aesthetic)
-Powered by Qwen2.5 (3B / 1.5B / 7B) via llama.cpp (Local Standalone Engine)
+AI Terminal Translator (Claude Code CLI Aesthetic)
+Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
 Architecture: Python Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: 1-Minute Auto-Idle Memory Release with Active-Translation Protection & Auto-Model Detection
+Features: Dynamic Model Auto-Discovery (models/*.gguf), 1-Min Auto-Idle Sleep, Smart OCR
 """
 
 import os
@@ -12,6 +12,7 @@ import re
 import sys
 import time
 import gc
+import glob
 import threading
 import subprocess
 import pyperclip
@@ -30,12 +31,6 @@ console = Console()
 BASE_DIR = os.path.dirname(__file__)
 SKILLS_DIR = os.path.join(BASE_DIR, "skills")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
-
-MODELS = {
-    "1": ("Qwen2.5-3B (高精度·推荐)", "qwen2.5-3b-instruct-q4_k_m.gguf", 3),
-    "2": ("Qwen2.5-1.5B (极速·轻量)", "qwen2.5-1.5b-instruct-q4_k_m.gguf", 1.5),
-    "3": ("Qwen2.5-7B (旗舰·出版级)", "qwen2.5-7b-instruct-q4_k_m.gguf", 7),
-}
 
 LANGUAGES = {
     "1": ("中文", "Simplified Chinese", "zh", "🇨🇳"),
@@ -78,7 +73,7 @@ def detect_language(text: str):
 
 def grab_clipboard_image():
     """检测并提取剪贴板中的图片保存为临时文件"""
-    tmp_path = "/tmp/qwen_clipboard_ocr.png"
+    tmp_path = "/tmp/ai_translator_clipboard_ocr.png"
     if os.path.exists(tmp_path):
         try:
             os.remove(tmp_path)
@@ -124,12 +119,30 @@ def grab_clipboard_image():
 def ocr_extract_text(img_path):
     """调用本地 tesseract 提取文本并保留空间排版"""
     try:
-        cmd = ["tesseract", img_path, "stdout", "-l", "chi_sim+eng", "--psm", "3"]
+        cmd = ["tesseract", img_path, "stdout", "-l", "chi_sim+eng+jpn", "--psm", "3"]
         res = subprocess.run(cmd, capture_output=True, text=True)
         return res.stdout.strip()
     except Exception as e:
         console.print(f"[bold red]❌ OCR 执行异常: {str(e)}[/]")
         return ""
+
+def format_model_name(filename: str) -> str:
+    """根据文件名自动解析友好的模型显示名称"""
+    clean_name = os.path.splitext(filename)[0]
+    clean_name = re.sub(r'[-_]instruct', '', clean_name, flags=re.IGNORECASE)
+    parts = clean_name.split('-')
+    
+    quant = ""
+    for p in list(parts):
+        if re.match(r'^q\d+.*', p, re.IGNORECASE):
+            quant = f"({p.upper()})"
+            parts.remove(p)
+            break
+            
+    base_title = " ".join(parts).title()
+    if quant:
+        return f"{base_title} {quant}"
+    return base_title
 
 class TranslatorCLI:
     def __init__(self):
@@ -143,8 +156,10 @@ class TranslatorCLI:
         self.llm = None
         self.lock = threading.Lock()
 
-        # 智能探测本地已存在的第一个可用模型作为默认启动模型
-        self.model_key = self._find_first_available_model()
+        # 动态扫描 models/*.gguf 模型
+        self.models_map = {}
+        self.active_model_idx = "1"
+        self.refresh_available_models()
 
         # 按键绑定
         self.kb = KeyBindings()
@@ -178,22 +193,45 @@ class TranslatorCLI:
             enable_history_search=True
         )
 
-        # 启动后台闲置看门狗线程
+        # 启动后台看门狗
         self.watchdog = threading.Thread(target=self._idle_watchdog, daemon=True)
         self.watchdog.start()
 
-    def _find_first_available_model(self):
-        """寻找本地 models/ 目录下第一个存在且可用的模型"""
-        # 优先 3B -> 1.5B -> 7B
-        for k in ["1", "2", "3"]:
-            fn = MODELS[k][1]
-            if os.path.exists(os.path.join(MODELS_DIR, fn)):
-                return k
-        # 兜底：如果都不在，默认返回 1
-        return "1"
+    def refresh_available_models(self):
+        """自动扫描 models/ 目录下所有的 *.gguf 模型文件并动态编号"""
+        os.makedirs(MODELS_DIR, exist_ok=True)
+        gguf_files = sorted(glob.glob(os.path.join(MODELS_DIR, "*.gguf")))
+        
+        self.models_map = {}
+        idx = 1
+        for fpath in gguf_files:
+            fname = os.path.basename(fpath)
+            fsize_gb = os.path.getsize(fpath) / (1024 * 1024 * 1024)
+            display_name = f"{format_model_name(fname)} [{fsize_gb:.1f}GB]"
+            self.models_map[str(idx)] = {
+                "name": display_name,
+                "filename": fname,
+                "path": fpath,
+                "size_gb": fsize_gb
+            }
+            idx += 1
+
+        # 默认优先选择 3B -> 1.5B -> 7B
+        if self.active_model_idx not in self.models_map:
+            found = False
+            for pref in ["3b", "1.5b", "7b"]:
+                for k, info in self.models_map.items():
+                    if pref in info["filename"].lower():
+                        self.active_model_idx = k
+                        found = True
+                        break
+                if found:
+                    break
+            if not found and self.models_map:
+                self.active_model_idx = "1"
 
     def _idle_watchdog(self):
-        """后台检测闲置时间：仅在完全没有翻译任务进行中且闲置 > 60秒时释放"""
+        """闲置 60 秒自动清空模型常驻内存"""
         while True:
             time.sleep(3)
             with self.lock:
@@ -202,27 +240,26 @@ class TranslatorCLI:
                 if self.llm is not None and (time.time() - self.last_active_time > self.idle_timeout):
                     self.unload_engine()
 
-    def get_model_path(self):
-        filename = MODELS[self.model_key][1]
-        return os.path.join(MODELS_DIR, filename)
+    def get_current_model_path(self):
+        if self.active_model_idx in self.models_map:
+            return self.models_map[self.active_model_idx]["path"]
+        return None
+
+    def get_current_model_name(self):
+        if self.active_model_idx in self.models_map:
+            return self.models_map[self.active_model_idx]["name"]
+        return "未加载模型 (No Model)"
 
     def init_engine(self, silent=False):
-        model_path = self.get_model_path()
-        model_name = MODELS[self.model_key][0]
+        self.refresh_available_models()
+        model_path = self.get_current_model_path()
         
-        if not os.path.exists(model_path):
-            # 尝试自动回退寻找其他已有模型
-            fallback_k = self._find_first_available_model()
-            fallback_path = os.path.join(MODELS_DIR, MODELS[fallback_k][1])
-            if os.path.exists(fallback_path):
-                self.model_key = fallback_k
-                model_path = fallback_path
-                model_name = MODELS[fallback_k][0]
-            else:
-                console.print(f"[bold red]❌ models/ 目录下未检测到模型文件:[/] {model_path}")
-                console.print("[yellow]请先运行 ./install.sh 下载模型，或将 .gguf 模型放入 models/ 目录中。[/]\n")
-                sys.exit(1)
+        if not model_path or not os.path.exists(model_path):
+            console.print(f"[bold red]❌ models/ 目录下未检测到任何可用的 .gguf 模型文件！[/]")
+            console.print("[yellow]💡 提示：请先运行 ./install.sh 下载模型，或将任意 GGUF 模型文件放入 models/ 目录中。[/]\n")
+            sys.exit(1)
         
+        model_name = self.get_current_model_name()
         if not silent:
             with console.status(f"[bold cyan]🚀 正在加载 {model_name} 本地引擎...[/]", spinner="dots"):
                 self._load_llama(model_path)
@@ -245,19 +282,20 @@ class TranslatorCLI:
         )
 
     def unload_engine(self):
-        """从内存中彻底释放模型"""
+        """从内存中释放模型"""
         if self.llm is not None:
             del self.llm
             self.llm = None
             gc.collect()
 
     def ensure_engine(self):
-        """需要推理时确保模型在内存中"""
+        """确保模型在内存中，休眠则瞬间唤醒"""
         with self.lock:
             if self.llm is None:
-                model_name = MODELS[self.model_key][0]
+                model_name = self.get_current_model_name()
+                model_path = self.get_current_model_path()
                 with console.status(f"[dim cyan]⚡ 唤醒 {model_name} (0.3秒从 SSD 加载)...[/]", spinner="dots"):
-                    self._load_llama(self.get_model_path())
+                    self._load_llama(model_path)
             self.last_active_time = time.time()
 
     @property
@@ -270,7 +308,7 @@ class TranslatorCLI:
         return f"{item[3]} {item[0]} ({item[1]})"
 
     def print_header(self):
-        model_name = MODELS[self.model_key][0]
+        model_name = self.get_current_model_name()
         grid = Table.grid(expand=True)
         grid.add_column(justify="left")
         grid.add_column(justify="right")
@@ -280,8 +318,8 @@ class TranslatorCLI:
         )
         console.print(Panel(
             grid,
-            title="[bold blue]🌐 Qwen Terminal Translator (1-Min Auto Sleep)[/]",
-            subtitle="[dim]Shortcuts: Ctrl+V (智能粘图/文本) | /lang (目标语言) | /model (切换模型) | /copy | /quit[/]",
+            title="[bold blue]🌐 AI Terminal Translator (Universal GGUF Engine)[/]",
+            subtitle="[dim]Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | /sleep | /quit[/]",
             border_style="bright_blue"
         ))
 
@@ -315,25 +353,27 @@ class TranslatorCLI:
         return final_prompt, source_name, target_name
 
     def switch_model(self):
-        console.print("\n[bold cyan]可选本地模型清单：[/]")
-        for k, (name, filename, _) in MODELS.items():
-            exists = os.path.exists(os.path.join(MODELS_DIR, filename))
-            current_flag = " [bold green](当前使用)[/]" if k == self.model_key else ""
-            status_tag = "[green]✓ 已安装[/]" if exists else "[dim red]✗ 未下载[/]"
-            console.print(f"  [bold yellow]{k}[/]. {name} [{status_tag}]{current_flag}")
+        self.refresh_available_models()
         
+        if not self.models_map:
+            console.print("\n[bold red]❌ models/ 目录下未发现任何可用的 .gguf 模型文件。[/]\n")
+            return
+
+        console.print("\n[bold cyan]📁 models/ 目录已安装的模型列表（自动发现）：[/]")
+        for idx, info in self.models_map.items():
+            current_flag = " [bold green](当前正在使用)[/]" if idx == self.active_model_idx else ""
+            console.print(f"  [bold yellow]{idx}[/]. {info['name']}{current_flag}")
+        
+        console.print(f"[dim]提示：将任意 .gguf 模型放入 models/ 目录即可在此自动识别加载。[/]")
+
         try:
-            choice = input("\n请选择模型编号 [1-3]: ").strip()
-            if choice in MODELS and choice != self.model_key:
-                target_file = os.path.join(MODELS_DIR, MODELS[choice][1])
-                if not os.path.exists(target_file):
-                    console.print(f"[bold red]❌ 模型文件不存在:[/] {MODELS[choice][1]}\n[yellow]请先通过 ./install.sh 下载该模型。[/]\n")
-                    return
+            choice = input(f"\n请选择模型编号 [1-{len(self.models_map)}]: ").strip()
+            if choice in self.models_map and choice != self.active_model_idx:
                 with self.lock:
-                    self.model_key = choice
+                    self.active_model_idx = choice
                     self.init_engine()
-                console.print(f"\n[bold green]✓ 模型已成功切换为:[/] [yellow]{MODELS[self.model_key][0]}[/]\n")
-            elif choice == self.model_key:
+                console.print(f"\n[bold green]✓ 成功切换模型为:[/] [yellow]{self.get_current_model_name()}[/]\n")
+            elif choice == self.active_model_idx:
                 console.print("[dim]保持当前模型不变。[/]\n")
             else:
                 console.print("[bold red]❌ 输入无效[/]\n")

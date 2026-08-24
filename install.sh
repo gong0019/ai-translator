@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Qwen Terminal Translator - Automated Installer
+# AI Terminal Translator - Universal GGUF Installer
 # Features: Self-Healing on Interruption, Domestic/Global Auto-Routing, Anti-Sudo Trap, TUI
 # Options: ./install.sh [--clean | --reinstall]
 # ==============================================================================
@@ -36,7 +36,7 @@ NC='\033[0m'
 
 echo -e "${BLUE}${BOLD}"
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║          🌐 Qwen Terminal Translator - Automated Setup        ║"
+echo "║           🌐 AI Terminal Translator - Automated Setup          ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
@@ -44,7 +44,7 @@ echo -e "${NC}"
 if [ "$CLEAN_MODE" = true ]; then
     echo -e "${YELLOW}🧹 触发 --clean 模式：正在清理历史虚拟环境与临时缓存...${NC}"
     rm -rf .venv
-    rm -f /tmp/qwen_clipboard_ocr.png
+    rm -f /tmp/ai_translator_clipboard_ocr.png
     echo -e "${GREEN}✓ 历史残留清理完毕，即将开始全新纯净安装。${NC}\n"
 fi
 
@@ -99,11 +99,10 @@ install_system_dependencies() {
     echo -e "${GREEN}✓ 系统依赖检查完成${NC}\n"
 }
 
-# 5. 自愈型 Python 虚拟环境配置 (损坏自动修复)
+# 5. 自愈型 Python 虚拟环境配置
 setup_python_environment() {
     echo -e "${CYAN}[3/6] 正在配置项目隔离 Python 虚拟环境 (.venv)...${NC}"
     
-    # 健康检查：如果已有 .venv，检查核心包是否完整且可被加载
     if [ -d ".venv" ] && [ -f ".venv/bin/python3" ]; then
         if .venv/bin/python3 -c "import llama_cpp, rich, prompt_toolkit, pyperclip, PIL" >/dev/null 2>&1; then
             echo -e "${GREEN}✓ 检测到已有 Python 虚拟环境且状态健康，跳过重复安装。${NC}\n"
@@ -114,7 +113,6 @@ setup_python_environment() {
         fi
     fi
 
-    # 创建虚拟环境
     if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
         sudo -u "$REAL_USER" python3 -m venv .venv
     else
@@ -126,7 +124,7 @@ setup_python_environment() {
         PIP_EXEC="pip3"
     fi
 
-    echo -e "${YELLOW}正在安装 Python 依赖库 (llama-cpp-python, rich, prompt_toolkit...)${NC}"
+    echo -e "${YELLOW}正在安装 Python 依赖库 (llama-cpp-python, rich, prompt_toolkit, Pillow...)${NC}"
     if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
         sudo -u "$REAL_USER" $PIP_EXEC install -q --upgrade pip $PIP_INDEX 2>/dev/null || true
         sudo -u "$REAL_USER" $PIP_EXEC install -r requirements.txt $PIP_INDEX
@@ -137,7 +135,7 @@ setup_python_environment() {
     echo -e "${GREEN}✓ Python 环境就绪${NC}\n"
 }
 
-# 6. TUI 交互式选择模型 (空格勾选，回车确认，断点续传 + 脏文件清洗)
+# 6. TUI 交互式选择模型
 select_and_download_models() {
     echo -e "${CYAN}[4/6] 配置本地 AI 模型...${NC}"
     mkdir -p "$PROJECT_DIR/models"
@@ -147,9 +145,9 @@ select_and_download_models() {
 
     SELECTED_MODELS=""
     if which whiptail >/dev/null 2>&1; then
-        SELECTED_MODELS=$(whiptail --title "Qwen Translator - 模型下载选择" \
-            --checklist "请按 [空格键] 勾选要下载的模型，按 [Tab] 移动至 OK 回车确认：\n" \
-            16 78 3 \
+        SELECTED_MODELS=$(whiptail --title "AI Translator - 推荐模型下载选择" \
+            --checklist "请按 [空格键] 勾选要下载的模型，按 [Tab] 移动至 OK 回车确认：\n(亦可稍后自行下载任意 GGUF 模型放入 models/ 目录)\n" \
+            17 78 3 \
             "3B" "Qwen2.5-3B-Instruct (2.0GB) [推荐·高精度·强逻辑]" ON \
             "1.5B" "Qwen2.5-1.5B-Instruct (1.1GB) [极速·轻量·低内存]" OFF \
             "7B" "Qwen2.5-7B-Instruct (4.7GB) [旗舰·出版级文采]" OFF \
@@ -167,7 +165,6 @@ select_and_download_models() {
         local url="$3"
         local target="$PROJECT_DIR/models/$filename"
 
-        # 清洗小于 1KB 的错误/空文件 (如上次中断保存的 HTML 报错页)
         if [ -f "$target" ]; then
             local fsize
             fsize=$(wc -c <"$target" 2>/dev/null || echo 0)
@@ -179,7 +176,6 @@ select_and_download_models() {
 
         echo -e "${CYAN}正在检查/下载 $name -> models/$filename ...${NC}"
         
-        # 调用具备断点续传与完整性判断的 Python 下载器
         python3 -c "
 import requests, os, time, sys
 
@@ -191,7 +187,7 @@ while True:
     headers = {'Range': f'bytes={existing_size}-'} if existing_size > 0 else {}
     try:
         r = requests.get(url, headers=headers, stream=True, timeout=20)
-        if r.status_code == 416: # Range not satisfiable: 文件已完整
+        if r.status_code == 416:
             print(f'  ✓ 模型文件已完整存在 ({existing_size/(1024*1024):.1f} MB)，跳过下载。')
             break
         r.raise_for_status()
@@ -291,56 +287,57 @@ configure_launchers() {
 
     if [[ "$CREATE_DESKTOP" =~ ^[Yy]$ ]]; then
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            cat << 'MAC_EOF' > "$DESKTOP_PATH/Qwen-Translator.command"
+            cat << 'MAC_EOF' > "$DESKTOP_PATH/AI-Translator.command"
 #!/bin/bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 /bin/bash "$PROJECT_DIR/run.sh"
 MAC_EOF
-            chmod +x "$DESKTOP_PATH/Qwen-Translator.command"
-            chown "$REAL_USER" "$DESKTOP_PATH/Qwen-Translator.command" 2>/dev/null || true
-            echo -e "${GREEN}✓ 已在 macOS 桌面创建 Qwen-Translator.command${NC}"
+            chmod +x "$DESKTOP_PATH/AI-Translator.command"
+            chown "$REAL_USER" "$DESKTOP_PATH/AI-Translator.command" 2>/dev/null || true
+            echo -e "${GREEN}✓ 已在 macOS 桌面创建 AI-Translator.command${NC}"
         elif grep -qi microsoft /proc/version 2>/dev/null; then
-            cat << WIN_EOF > "$DESKTOP_PATH/Qwen-Translator.bat"
+            cat << WIN_EOF > "$DESKTOP_PATH/AI-Translator.bat"
 @echo off
 wsl.exe -e bash "$PROJECT_DIR/run.sh"
 WIN_EOF
-            echo -e "${GREEN}✓ 已在 Windows 桌面创建 Qwen-Translator.bat${NC}"
+            echo -e "${GREEN}✓ 已在 Windows 桌面创建 AI-Translator.bat${NC}"
         else
-            cat << LINUX_EOF > "$DESKTOP_PATH/Qwen-Translator.desktop"
+            cat << LINUX_EOF > "$DESKTOP_PATH/AI-Translator.desktop"
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Qwen 终端翻译器
-Comment=Local AI Translator powered by Qwen2.5
-Exec=gnome-terminal --geometry=95x28 --title="Qwen 终端翻译器" -- bash -c "$PROJECT_DIR/run.sh; exec bash"
+Name=AI 终端翻译器
+Comment=Universal Local AI Translator powered by GGUF
+Exec=gnome-terminal --geometry=95x28 --title="AI 终端翻译器" -- bash -c "$PROJECT_DIR/run.sh; exec bash"
 Icon=accessories-dictionary
 Terminal=false
 Categories=Utility;Translation;Development;
 LINUX_EOF
-            chmod +x "$DESKTOP_PATH/Qwen-Translator.desktop"
+            chmod +x "$DESKTOP_PATH/AI-Translator.desktop"
             if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
-                chown "$REAL_USER":"$REAL_USER" "$DESKTOP_PATH/Qwen-Translator.desktop"
-                su - "$REAL_USER" -c "gio set '$DESKTOP_PATH/Qwen-Translator.desktop' metadata::trusted true" 2>/dev/null || true
+                chown "$REAL_USER":"$REAL_USER" "$DESKTOP_PATH/AI-Translator.desktop"
+                su - "$REAL_USER" -c "gio set '$DESKTOP_PATH/AI-Translator.desktop' metadata::trusted true" 2>/dev/null || true
             else
-                gio set "$DESKTOP_PATH/Qwen-Translator.desktop" metadata::trusted true 2>/dev/null || true
+                gio set "$DESKTOP_PATH/AI-Translator.desktop" metadata::trusted true 2>/dev/null || true
             fi
-            echo -e "${GREEN}✓ 已在 Linux 桌面创建 Qwen-Translator.desktop 图标${NC}"
+            echo -e "${GREEN}✓ 已在 Linux 桌面创建 AI-Translator.desktop 图标${NC}"
         fi
     fi
 
     echo
-    read -p "是否添加全局终端命令 'qwen-trans'？[Y/n]: " ADD_GLOBAL
+    read -p "是否添加全局终端命令 'ai-trans'？[Y/n]: " ADD_GLOBAL
     ADD_GLOBAL=${ADD_GLOBAL:-Y}
 
     if [[ "$ADD_GLOBAL" =~ ^[Yy]$ ]]; then
         LOCAL_BIN="$REAL_HOME/.local/bin"
         mkdir -p "$LOCAL_BIN"
+        ln -sf "$PROJECT_DIR/run.sh" "$LOCAL_BIN/ai-trans"
         ln -sf "$PROJECT_DIR/run.sh" "$LOCAL_BIN/qwen-trans"
         if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
-            chown -h "$REAL_USER":"$REAL_USER" "$LOCAL_BIN/qwen-trans"
+            chown -h "$REAL_USER":"$REAL_USER" "$LOCAL_BIN/ai-trans" "$LOCAL_BIN/qwen-trans"
             chown "$REAL_USER":"$REAL_USER" "$LOCAL_BIN"
         fi
-        echo -e "${GREEN}✓ 全局命令已添加: 输入 'qwen-trans' 即可随时启动${NC}"
+        echo -e "${GREEN}✓ 全局命令已添加: 输入 'ai-trans' 或 'qwen-trans' 即可随时启动${NC}"
         if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
             echo -e "${YELLOW}提示: 请确保 $LOCAL_BIN 已加入你的 PATH 环境变量。${NC}"
         fi
@@ -351,16 +348,16 @@ LINUX_EOF
 finish_installation() {
     echo -e "\n${CYAN}[6/6] 安装与配置全部完成！${NC}"
     echo -e "${GREEN}${BOLD}================================================================${NC}"
-    echo -e "${GREEN}${BOLD}           🎉 Qwen Terminal Translator 安装成功！                ${NC}"
+    echo -e "${GREEN}${BOLD}           🎉 AI Terminal Translator 安装成功！                  ${NC}"
     echo -e "${GREEN}${BOLD}================================================================${NC}"
     echo -e "启动方式："
-    echo -e "  1. 双击桌面上的 ${BOLD}「Qwen 终端翻译器」${NC} 图标"
-    echo -e "  2. 在任意终端输入：${CYAN}qwen-trans${NC}"
+    echo -e "  1. 双击桌面上的 ${BOLD}「AI 终端翻译器」${NC} 图标"
+    echo -e "  2. 在任意终端输入：${CYAN}ai-trans${NC} (或 ${CYAN}qwen-trans${NC})"
     echo -e "  3. 在项目根目录执行：${CYAN}./run.sh${NC}"
     echo -e "\n快捷指令速查："
     echo -e "  • ${BOLD}Ctrl+V${NC} : 智能粘贴 (截图自动本地 OCR 识别并保留排版翻译)"
     echo -e "  • ${BOLD}/lang${NC}  : 切换目标输出语言"
-    echo -e "  • ${BOLD}/model${NC} : 切换 3B (高精度) / 1.5B (极速)"
+    echo -e "  • ${BOLD}/model${NC} : 动态切换 models/ 目录下的任意 GGUF 模型"
     echo -e "  • ${BOLD}/sleep${NC} : 立即休眠清空内存 (平时 1分钟闲置自动休眠 0 MB)"
     echo -e "  • ${BOLD}/quit${NC}  : 退出程序"
     echo -e "${GREEN}================================================================${NC}\n"

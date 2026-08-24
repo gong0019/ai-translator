@@ -1,9 +1,9 @@
 <div align="center">
 
-# 🌐 Qwen 终端翻译器 (AI Translator)
+# 🌐 AI 终端翻译器 (AI Terminal Translator)
 
-**基于 Qwen2.5 (3B / 1.5B) 与 llama.cpp 的极速本地 AI 终端翻译工具。**  
-*具备 Claude Code CLI 审美、动态多语种 Skill 路由、截图智能 OCR 即贴即译与 1 分钟闲置自动休眠（0 MB 内存常驻）。*
+**基于 llama.cpp 与通用 GGUF 引擎（Qwen2.5、DeepSeek-R1、Llama-3、Mistral 等）的极速本地 AI 终端翻译工具。**  
+*具备 Claude Code CLI 审美、动态多语种 Skill 路由、截图智能 OCR 即贴即译、多模型动态自动发现与 1 分钟闲置自动休眠（0 MB 内存常驻）。*
 
 ---
 
@@ -16,9 +16,10 @@
 ## 🌟 核心亮点
 
 - ⚡ **本地运行 · 隐私安全**：基于底层 C++ 优化推理（`llama.cpp`），100% 运行于本地 CPU/核显/显卡。零 API 费用、零数据上云。
+- 🧩 **通用 GGUF 引擎与模型动态自动发现**：只需将任意 `.gguf` 格式的大模型（Qwen2.5、DeepSeek-R1、Llama-3.2、Gemma、Mistral）放入 `models/` 目录，程序自动识别并支持一键热切换。
 - 🧠 **动态 Skill 专项语种路由**：Python 层毫秒级嗅探源语言，动态注入专属翻译策略（日译中否定防漏、英译中破除从句倒装、中译英主语补齐）。
 - 📷 **截图智能 OCR 即译 (`Ctrl+V`)**：按下 `Ctrl+V` 自动捕获剪贴板截图，调用本地 Tesseract 提取文字并保留空间排版，逐行对照翻译。
-- 💤 **1 分钟闲置自动休眠（0 MB 内存占用）**：翻译完成后 60 秒无操作，自动释放 1.8GB 模型权重（平时 0 MB 负载）；新任务时 0.3 秒瞬间从固态硬盘唤醒，长文翻译期间具备任务执行锁保护。
+- 💤 **1 分钟闲置自动休眠（0 MB 内存占用）**：翻译完成后 60 秒无操作，自动释放模型权重（平时 0 MB 负载）；新任务时 0.3 秒瞬间从固态硬盘唤醒，长文翻译期间具备任务执行锁保护。
 - 📋 **自动剪贴板同步**：翻译完毕自动写回系统剪贴板，无缝衔接粘贴使用。
 - 🧼 **纯净输出**：上下水平分割线渲染，彻底移除左右竖线 `│` 字符，鼠标划词复制 100% 纯文本无污染。
 - 🚀 **一键自动化安装与卸载**：内置 TUI 模型多选菜单、国内外镜像智能测速分流、防 Sudo 权限污染与跨平台桌面启动器自动生成及纯净卸载。
@@ -42,9 +43,9 @@ chmod +x install.sh
 > 1. 自动探测网络环境，国内自动切换阿里云 PyPI 镜像与 HF-Mirror 高速节点。
 > 2. 自动安装系统底层依赖（`tesseract-ocr`、`cmake`、`xclip`/`wl-clipboard`）。
 > 3. 初始化隔离的私有虚拟环境（`.venv/`），并使用真实用户权限隔离 Sudo。
-> 4. 弹出 TUI 交互式菜单（按 `空格键` 选择下载 3B 推荐高精度 / 1.5B 极速模型）。
+> 4. 弹出 TUI 交互式菜单（按 `空格键` 选择下载推荐模型）。
 > 5. 自动探测系统桌面（Linux 中英文桌面、macOS `~/Desktop`、Windows WSL 宿主桌面）并生成双击图标。
-> 6. 可选将 `qwen-trans` 软链接至系统终端 `$PATH`。
+> 6. 自动将 `ai-trans` 和 `qwen-trans` 软链接至系统终端 `$PATH`。
 
 ### 2. 纯净卸载
 
@@ -59,9 +60,11 @@ chmod +x uninstall.sh
 
 ## 🎮 使用方法与快捷指令
 
-在终端输入 `qwen-trans` 或双击桌面图标即可启动：
+在终端输入 `ai-trans` 或双击桌面图标即可启动：
 
 ```bash
+ai-trans
+# 或使用旧别名
 qwen-trans
 # 或在项目根目录运行
 ./run.sh
@@ -70,12 +73,12 @@ qwen-trans
 ### 终端交互界面
 
 ```text
-╭───────────────────────────────────────────────────────────────────╮
-│  🌐 Qwen Terminal Translator (Skill-Based Architecture)           │
-│  Input: 🔍 智能语种嗅探 ➔ Target: 🇨🇳 中文 (Simplified Chinese)     │
-│  Model: Qwen2.5-3B (高精度·推荐) | AutoSleep: 1m | AutoCopy: ON   │
-╰───────────────────────────────────────────────────────────────────╯
-Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (模型) | /sleep | /quit
+╭───────────────────────────────────────────────────────────────────────╮
+│  🌐 AI Terminal Translator (Universal GGUF Engine)                    │
+│  Input: 🔍 智能语种嗅探 ➔ Target: 🇨🇳 中文 (Simplified Chinese)         │
+│  Model: Qwen2.5 3B (Q4_K_M) [2.0GB] | AutoSleep: 1m | AutoCopy: ON    │
+╰───────────────────────────────────────────────────────────────────────╯
+Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | /sleep | /quit
 
 [auto➔zh] > Missing one day of practice is less discouraging when the goal is to continue over a long period rather than to perform perfectly every day.
 
@@ -91,7 +94,7 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (模型) | /sl
 | :--- | :--- |
 | **`Ctrl+V`** | **智能粘贴**：剪贴板为图片时自动本地 OCR 排版识别并翻译，为文本时正常粘贴。 |
 | **`/lang`** | 切换目标输出语言（1: 中文, 2: 英语, 3: 日语, 4: 韩语, 5: 德语, 6: 法语 等 9 大语种）。 |
-| **`/model`** | 实时热切换本地模型（3B 高精度 / 1.5B 极速）。 |
+| **`/model`** | **热切换模型**：自动扫描 `models/` 目录并列出所有已下载的 GGUF 模型供自由切换。 |
 | **`/sleep`** 或 **`/unload`** | 立即手动休眠并释放模型内存（0 MB 占用）。 |
 | **`/copy`** | 开启 / 关闭自动同步写入系统剪贴板。 |
 | **`/clear`** | 清屏并重新绘制状态栏。 |
@@ -99,27 +102,20 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (模型) | /sl
 
 ---
 
-## 🧩 如何添加自定义模型
+## 🧩 如何添加任意自定义模型（免改代码·随放随用）
 
-你可以下载任何 GGUF 格式的量化大模型（如 Qwen2.5-7B、DeepSeek-R1-Distill-Qwen、Llama-3 等）放入项目中使用：
+本工具支持**任何 GGUF 格式的量化模型**（Qwen、DeepSeek-R1、Llama-3、Gemma-2、Mistral、Phi-3 等）。
 
-1. **下载 GGUF 模型文件** 到 `models/` 目录：
+1. **只需将任意 `.gguf` 模型文件放入 `models/` 目录**：
    ```bash
-   # 示例：下载 Qwen2.5-7B-Instruct GGUF 模型
-   wget -c -P models/ "https://hf-mirror.com/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf"
+   # 示例 1：下载 DeepSeek-R1-Distill-Qwen-7B GGUF
+   wget -c -P models/ "https://hf-mirror.com/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+
+   # 示例 2：下载 Llama-3.2-3B-Instruct GGUF
+   wget -c -P models/ "https://hf-mirror.com/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
    ```
 
-2. **在 `translator_cli.py` 中注册模型**：
-   打开 `translator_cli.py`，在顶部的 `MODELS` 字典中追加一行配置：
-   ```python
-   MODELS = {
-       "1": ("Qwen2.5-3B (高精度·推荐)", "qwen2.5-3b-instruct-q4_k_m.gguf", 3),
-       "2": ("Qwen2.5-1.5B (极速·轻量)", "qwen2.5-1.5b-instruct-q4_k_m.gguf", 1.5),
-       "3": ("Qwen2.5-7B (旗舰画质)", "qwen2.5-7b-instruct-q4_k_m.gguf", 7), # <- 在此添加
-   }
-   ```
-
-3. 启动翻译器并在终端输入 `/model` 即可切换至新模型！
+2. **无需修改任何代码！** 启动翻译器并在终端输入 **`/model`**，程序会自动检测并列出新模型，输入编号即可直接加载使用！
 
 ---
 
@@ -145,8 +141,8 @@ ai-translator/
 ├── run.sh                  # 启动入口（自动加载虚拟环境）
 ├── run.bat                 # Windows 原生启动入口
 ├── requirements.txt        # Python 依赖清单
-├── translator_cli.py       # 核心程序（动态加载 skills/*.md）
-├── models/                 # 模型存储目录（.gitignore 忽略权重）
+├── translator_cli.py       # 核心程序（通用 GGUF 引擎，动态发现模型）
+├── models/                 # 模型存储目录（随放任意 .gguf 模型）
 │   └── .gitkeep
 ├── skills/                 # 核心提示词与多语种专项规则库
 │   ├── base.md             # 通用底座
