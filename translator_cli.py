@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 Qwen Terminal Translator (Claude Code CLI Aesthetic)
-Powered by Qwen2.5 (3B / 1.5B) via llama.cpp (Local Standalone Engine)
+Powered by Qwen2.5 (3B / 1.5B / 7B) via llama.cpp (Local Standalone Engine)
 Architecture: Python Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: 1-Minute Auto-Idle Memory Release with Active-Translation Protection
+Features: 1-Minute Auto-Idle Memory Release with Active-Translation Protection & Auto-Model Detection
 """
 
 import os
@@ -29,10 +29,12 @@ console = Console()
 
 BASE_DIR = os.path.dirname(__file__)
 SKILLS_DIR = os.path.join(BASE_DIR, "skills")
+MODELS_DIR = os.path.join(BASE_DIR, "models")
 
 MODELS = {
     "1": ("Qwen2.5-3B (高精度·推荐)", "qwen2.5-3b-instruct-q4_k_m.gguf", 3),
     "2": ("Qwen2.5-1.5B (极速·轻量)", "qwen2.5-1.5b-instruct-q4_k_m.gguf", 1.5),
+    "3": ("Qwen2.5-7B (旗舰·出版级)", "qwen2.5-7b-instruct-q4_k_m.gguf", 7),
 }
 
 LANGUAGES = {
@@ -131,16 +133,18 @@ def ocr_extract_text(img_path):
 
 class TranslatorCLI:
     def __init__(self):
-        self.model_key = "1"
         self.target_lang_key = "1"
         self.auto_copy = True
         
         # 1 分钟自动休眠释放内存 (秒)
         self.idle_timeout = 60
         self.last_active_time = time.time()
-        self.is_busy = False  # 正在翻译中锁，彻底杜绝翻译长文时被误释放
+        self.is_busy = False
         self.llm = None
         self.lock = threading.Lock()
+
+        # 智能探测本地已存在的第一个可用模型作为默认启动模型
+        self.model_key = self._find_first_available_model()
 
         # 按键绑定
         self.kb = KeyBindings()
@@ -178,29 +182,46 @@ class TranslatorCLI:
         self.watchdog = threading.Thread(target=self._idle_watchdog, daemon=True)
         self.watchdog.start()
 
+    def _find_first_available_model(self):
+        """寻找本地 models/ 目录下第一个存在且可用的模型"""
+        # 优先 3B -> 1.5B -> 7B
+        for k in ["1", "2", "3"]:
+            fn = MODELS[k][1]
+            if os.path.exists(os.path.join(MODELS_DIR, fn)):
+                return k
+        # 兜底：如果都不在，默认返回 1
+        return "1"
+
     def _idle_watchdog(self):
         """后台检测闲置时间：仅在完全没有翻译任务进行中且闲置 > 60秒时释放"""
         while True:
             time.sleep(3)
             with self.lock:
-                # 若正在翻译中（is_busy = True），绝不释放
                 if self.is_busy:
                     continue
-                
                 if self.llm is not None and (time.time() - self.last_active_time > self.idle_timeout):
                     self.unload_engine()
 
     def get_model_path(self):
         filename = MODELS[self.model_key][1]
-        return os.path.join(BASE_DIR, "models", filename)
+        return os.path.join(MODELS_DIR, filename)
 
     def init_engine(self, silent=False):
         model_path = self.get_model_path()
         model_name = MODELS[self.model_key][0]
         
         if not os.path.exists(model_path):
-            console.print(f"[bold red]❌ 未找到模型文件:[/] {model_path}")
-            sys.exit(1)
+            # 尝试自动回退寻找其他已有模型
+            fallback_k = self._find_first_available_model()
+            fallback_path = os.path.join(MODELS_DIR, MODELS[fallback_k][1])
+            if os.path.exists(fallback_path):
+                self.model_key = fallback_k
+                model_path = fallback_path
+                model_name = MODELS[fallback_k][0]
+            else:
+                console.print(f"[bold red]❌ models/ 目录下未检测到模型文件:[/] {model_path}")
+                console.print("[yellow]请先运行 ./install.sh 下载模型，或将 .gguf 模型放入 models/ 目录中。[/]\n")
+                sys.exit(1)
         
         if not silent:
             with console.status(f"[bold cyan]🚀 正在加载 {model_name} 本地引擎...[/]", spinner="dots"):
@@ -296,13 +317,18 @@ class TranslatorCLI:
     def switch_model(self):
         console.print("\n[bold cyan]可选本地模型清单：[/]")
         for k, (name, filename, _) in MODELS.items():
+            exists = os.path.exists(os.path.join(MODELS_DIR, filename))
             current_flag = " [bold green](当前使用)[/]" if k == self.model_key else ""
-            exists = "✓" if os.path.exists(os.path.join(BASE_DIR, "models", filename)) else "✗ 未就绪"
-            console.print(f"  [bold yellow]{k}[/]. {name} [{exists}]{current_flag}")
+            status_tag = "[green]✓ 已安装[/]" if exists else "[dim red]✗ 未下载[/]"
+            console.print(f"  [bold yellow]{k}[/]. {name} [{status_tag}]{current_flag}")
         
         try:
-            choice = input("\n请选择模型编号 [1-2]: ").strip()
+            choice = input("\n请选择模型编号 [1-3]: ").strip()
             if choice in MODELS and choice != self.model_key:
+                target_file = os.path.join(MODELS_DIR, MODELS[choice][1])
+                if not os.path.exists(target_file):
+                    console.print(f"[bold red]❌ 模型文件不存在:[/] {MODELS[choice][1]}\n[yellow]请先通过 ./install.sh 下载该模型。[/]\n")
+                    return
                 with self.lock:
                     self.model_key = choice
                     self.init_engine()
@@ -358,8 +384,6 @@ class TranslatorCLI:
 
     def stream_translate(self, text: str):
         self.ensure_engine()
-        
-        # 标记为繁忙状态（防止长文翻译途中被看门狗释放）
         with self.lock:
             self.is_busy = True
 
@@ -415,7 +439,6 @@ class TranslatorCLI:
         except Exception as e:
             console.print(f"\n[bold red]❌ 翻译出错: {str(e)}[/]\n")
         finally:
-            # 翻译结束，重置计时器并解除繁忙锁，从此时起重新倒计时 60 秒
             with self.lock:
                 self.is_busy = False
                 self.last_active_time = time.time()
@@ -439,7 +462,6 @@ class TranslatorCLI:
                 if not user_input:
                     continue
 
-                # 处理斜杠指令
                 if user_input in ["/quit", "/exit", ":q"]:
                     console.print("[dim]👋 Goodbye![/]")
                     break
