@@ -4,11 +4,13 @@ TASK: Translate all English words, Japanese phrases/characters, and mixed foreig
 
 TARGET SCRIPT PURITY (ZERO FOREIGN RESIDUAL):
 - The entire output MUST be in 100% natural Simplified Chinese (简体中文).
-- Translate every single foreign word, connective, and adverb (e.g. "and", "maybe" → "或许/可能", "probably" → "大概", "tired" → "累", "shopping" → "购物", "intuitive" → "直观", "clean" → "清爽/简洁", "UI" → "界面", "button" → "按钮").
-- Absolutely NO English words or Japanese Hiragana/Katakana characters are allowed in the Chinese output (except code, URLs, or product brand names).
+- Translate all common devices, electronics, and objects into Chinese (e.g. laptop → 笔记本电脑, app → 软件, file → 文件).
+- Translate all Japanese idiomatic expressions, compound verbs, and phrases completely into Chinese (e.g. 「気づいたら」→「不知不觉中」, 「お疲れ様」→「辛苦了」, 「大丈夫？」→「没事吧？」, 「もう無理」→「撑不下去了」). Absolutely NEVER leave Japanese mixed characters like 「気づ」 or Hiragana.
+- Translate every single foreign adjective, adverb, and noun into Chinese (e.g. clean → 清爽, intuitive → 直观, simple → 简单, probably → 大概, hot → 热, ice cream → 冰淇淋).
+- Absolutely NO English words or Japanese characters are allowed in the Chinese output (except code syntax, URLs, or product brand names).
 
 QUOTATIONS & SPOKEN GREETINGS (STRICT):
-- Translate all foreign spoken greetings, conversational phrases, and expressions inside quotation marks (「...」, "...", '...') into natural Chinese (e.g. 「お疲れ様」→「辛苦了」, 「大丈夫？」→「没事吧？」, "good night" → "晚安", 「もう無理」→「不行了/受不了了」).
+- Translate all foreign spoken greetings, conversational phrases, and expressions inside quotation marks (「...」, "...", '...') into natural Chinese.
 - Do NOT keep quotes in untranslated Japanese or English.
 
 REQUIREMENTS:
