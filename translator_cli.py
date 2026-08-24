@@ -4,7 +4,7 @@
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
 Architecture: Fast Multi-Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: 25 Specialized Linguistic Skills, Chinglish/Mixed Text Auto-Purifier, Physical CPU Thread Optimizer
+Features: 24 Specialized Linguistic Skills, Chinglish/Mixed Text Auto-Purifier, Physical CPU Thread Optimizer
 """
 
 import os
@@ -66,7 +66,6 @@ LATIN_STOPWORDS = {
 DEFAULT_CONFIG = {
     "target_lang_key": "1",
     "selected_model_filename": "",
-    "auto_copy": True,
     "idle_timeout": 60,
     "n_ctx": 8192,
     "temperature": 0.1,
@@ -78,7 +77,7 @@ def get_optimal_threads():
     """获取最适合矩阵计算的物理核心数（避免超线程 L1/L2 缓存抖动）"""
     count = os.cpu_count() or 4
     if count >= 8:
-        return count // 2  # 8 逻辑核 -> 4 物理核心
+        return count // 2
     elif count >= 4:
         return 4
     return count
@@ -273,14 +272,12 @@ class TranslatorCLI:
         # 底部常驻状态栏
         def get_bottom_toolbar():
             engine_status = "[Active]" if self.llm is not None else "[0 MB Sleep]"
-            copy_status = "ON" if self.config.get("auto_copy", True) else "OFF"
             model_disp = self.get_current_model_name()
             lang_disp = self.target_lang_display
             return HTML(
                 f" <style bg='#1a1a24' fg='#00d7af'><b>Target:</b></style> {lang_disp} | "
                 f"<style bg='#1a1a24' fg='#00afff'><b>Model:</b></style> {model_disp} {engine_status} | "
-                f"<style bg='#1a1a24' fg='#ffd700'><b>Copy:</b></style> {copy_status} | "
-                f"<style fg='#777777'>/model /lang /copy /sleep /clear /quit</style> "
+                f"<style fg='#777777'>/model /lang /sleep /clear /quit</style> "
             )
 
         self.session = PromptSession(
@@ -301,14 +298,6 @@ class TranslatorCLI:
     @target_lang_key.setter
     def target_lang_key(self, val):
         self.config["target_lang_key"] = str(val)
-
-    @property
-    def auto_copy(self):
-        return bool(self.config.get("auto_copy", True))
-
-    @auto_copy.setter
-    def auto_copy(self, val):
-        self.config["auto_copy"] = bool(val)
 
     @property
     def idle_timeout(self):
@@ -477,7 +466,7 @@ class TranslatorCLI:
         grid.add_column(justify="right")
         grid.add_row(
             f"[bold cyan]Input:[/] [yellow]🔍 智能语种嗅探[/] ➔ [bold cyan]Target:[/] [green]{self.target_lang_display}[/]",
-            f"[bold cyan]Model:[/] [green]{model_name}[/] | [dim]AutoSleep: {self.idle_timeout}s[/] | [dim]AutoCopy: {'[green]ON[/]' if self.auto_copy else '[red]OFF[/]'}[/]"
+            f"[bold cyan]Model:[/] [green]{model_name}[/] | [dim]AutoSleep: {self.idle_timeout}s[/]"
         )
         console.print(Panel(
             grid,
@@ -578,14 +567,6 @@ class TranslatorCLI:
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]已取消选择[/]\n")
 
-    def toggle_copy(self):
-        self.auto_copy = not self.auto_copy
-        self.save_config()
-        console.clear()
-        self.print_header()
-        status = "[green]开启 (ON)[/]" if self.auto_copy else "[red]关闭 (OFF)[/]"
-        console.print(f"\n[bold green]✓ 译文自动同步剪贴板:[/] {status} [dim](已保存偏好)[/]\n")
-
     def handle_ocr_and_translate(self, img_path: str):
         img_path = os.path.expanduser(img_path.strip().strip('"').strip("'"))
         if not os.path.exists(img_path):
@@ -672,17 +653,7 @@ class TranslatorCLI:
             console.rule("[dim green]END[/]", style="green")
 
             elapsed = time.time() - start_time
-            full_translation = full_translation.strip()
-
-            clipboard_info = ""
-            if self.auto_copy and full_translation:
-                try:
-                    pyperclip.copy(full_translation)
-                    clipboard_info = " | [cyan]已复制到剪贴板 📋[/]"
-                except Exception:
-                    pass
-
-            console.print(f"[dim]耗时: {elapsed:.2f}s{clipboard_info} | (闲置 {self.idle_timeout} 秒后将自动释放内存)[/]\n")
+            console.print(f"[dim]耗时: {elapsed:.2f}s | (闲置 {self.idle_timeout} 秒后将自动释放内存)[/]\n")
 
         except Exception as e:
             console.print(f"\n[bold red]❌ 翻译出错: {str(e)}[/]\n")
@@ -723,9 +694,6 @@ class TranslatorCLI:
                     console.clear()
                     self.print_header()
                     continue
-                elif user_input == "/copy":
-                    self.toggle_copy()
-                    continue
                 elif user_input in ["/sleep", "/unload"]:
                     with self.lock:
                         self.unload_engine()
@@ -748,7 +716,7 @@ class TranslatorCLI:
                     self.print_header()
                     continue
                 elif user_input.startswith("/"):
-                    console.print(f"[bold red]未知指令:[/] {user_input} (可用指令: /model, /lang, /ocr, /sleep, /copy, /config, /clear, /quit)\n")
+                    console.print(f"[bold red]未知指令:[/] {user_input} (可用指令: /model, /lang, /ocr, /sleep, /config, /clear, /quit)\n")
                     continue
 
                 clean_path = user_input.strip('"').strip("'")
