@@ -479,15 +479,16 @@ class TranslatorCLI:
         source_code, source_name = detect_language(text)
         target_code = self.target_lang_item["code"]
         target_name = self.target_lang_item["en"]
+        pair_key = None
 
         # 处理中英/中日等混合夹杂句（转换为纯正简体中文）
         if source_code == "mixed":
             if target_code == "zh":
-                skill_prompt = load_skill("mixed_to_zh")
-                if skill_prompt:
-                    return skill_prompt, "Mixed / 混合夹杂", "Simplified Chinese (简体中文)"
-            source_code = "zh"
-            source_name = CODE_TO_LANG["zh"]["en"]
+                pair_key = "mixed_to_zh"
+                source_name = "Mixed / 混合夹杂"
+            else:
+                source_code = "zh"
+                source_name = CODE_TO_LANG["zh"]["en"]
         
         # 确定性双向互翻（纯中文输入且目标为中文时，自动翻译为英文）
         if source_code == target_code:
@@ -505,7 +506,8 @@ class TranslatorCLI:
         base_prompt = base_template.replace("{source_name}", source_name).replace("{target_name}", target_name)
         
         # 拼接专属专项 Skill
-        pair_key = f"{source_code}_to_{target_code}"
+        if pair_key is None:
+            pair_key = f"{source_code}_to_{target_code}"
         skill_prompt = load_skill(pair_key)
         
         if skill_prompt:
