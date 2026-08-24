@@ -9,6 +9,124 @@ from translation_quality import (
 
 
 class QualityRetryTests(unittest.TestCase):
+    def test_retry_prompt_describes_non_lexical_defects_without_internal_codes(self):
+        cases = (
+            (
+                "empty",
+                "Six people attended.",
+                CompletionResult(""),
+                CompletionResult("六人参加。"),
+                "Provide a complete translation; the current translation is empty.",
+            ),
+            (
+                "structure",
+                "One.\n\nTwo.",
+                CompletionResult("一。二。"),
+                CompletionResult("一。\n\n二。"),
+                "Preserve all source paragraphs in the same order.",
+            ),
+            (
+                "numeric",
+                "18 people attended.",
+                CompletionResult("二十人参加。"),
+                CompletionResult("十八人参加。"),
+                "Preserve every source number exactly and do not add numbers.",
+            ),
+            (
+                "truncation",
+                "Six people attended.",
+                CompletionResult("六人参加。", truncated=True),
+                CompletionResult("六人参加。"),
+                "Complete the translation; the previous output was truncated.",
+            ),
+        )
+        internal_codes = (
+            "EMPTY_OUTPUT",
+            "PARAGRAPH_COUNT_MISMATCH",
+            "LINE_STRUCTURE_LOSS",
+            "SENTENCE_COUNT_LOSS",
+            "ARABIC_NUMBER_MISMATCH",
+            "ENGLISH_NUMBER_MISMATCH",
+            "OUTPUT_TRUNCATED",
+        )
+        for name, source, first, second, expected_instruction in cases:
+            with self.subTest(name=name):
+                outputs = iter((first, second))
+                calls = []
+
+                def complete(messages, temperature):
+                    calls.append((messages, temperature))
+                    return next(outputs)
+
+                run_quality_checked_completion(
+                    source,
+                    "zh",
+                    "SYSTEM",
+                    complete,
+                    0.1,
+                    1,
+                )
+
+                repair_request = calls[1][0][-1]["content"]
+                self.assertIn(expected_instruction, repair_request)
+                for code in internal_codes:
+                    self.assertNotIn(code, repair_request)
+
+    def test_persistent_non_lexical_defects_have_concrete_chinese_review_notes(self):
+        cases = (
+            (
+                "glossary",
+                "Reuters reported.",
+                CompletionResult("路透报道。"),
+                {"Reuters": "路透社"},
+                ("可能未使用指定术语：Reuters => 路透社",),
+            ),
+            (
+                "numeric",
+                "18 people attended.",
+                CompletionResult("二十人参加。"),
+                None,
+                ("可能存在数字不一致，请人工检查。",),
+            ),
+            (
+                "structure",
+                "One.\n\nTwo.",
+                CompletionResult("一。二。"),
+                None,
+                ("可能存在结构或内容缺失，请人工检查。",),
+            ),
+            (
+                "truncation",
+                "Six people attended.",
+                CompletionResult("六人参加。", truncated=True),
+                None,
+                ("译文可能被截断，请人工检查。",),
+            ),
+        )
+        for name, source, failed_result, glossary, expected_notes in cases:
+            with self.subTest(name=name):
+                calls = []
+
+                def complete(messages, temperature):
+                    calls.append((messages, temperature))
+                    return failed_result
+
+                outcome = run_quality_checked_completion(
+                    source,
+                    "zh",
+                    "SYSTEM",
+                    complete,
+                    0.1,
+                    1,
+                    glossary=glossary,
+                )
+
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(outcome.review_notes, expected_notes)
+                self.assertFalse(
+                    any(note in outcome.errors for note in outcome.review_notes)
+                )
+
     def test_retry_prompt_names_concrete_defects_and_includes_glossary(self):
         outputs = iter(
             (

@@ -33,7 +33,22 @@ _WORD_WRAP_SUFFIXES = {
 _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
 _ARABIC_NUMBER = re.compile(r"(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?")
 _CHINESE_NUMBER = re.compile(r"[零〇一二两三四五六七八九十百千万亿]+")
-_SOURCE_ACRONYM = re.compile(r"\b[A-Z]{2,8}\b")
+_CHINESE_DECIMAL = re.compile(
+    r"(?:百分之)?(?P<integer>[零〇一二两三四五六七八九十百千万亿]+)"
+    r"点(?P<fraction>[零〇一二两三四五六七八九]+)"
+)
+_SOURCE_ACRONYM = re.compile(
+    r"\b(?:[A-Z]{2,5}|[A-Z]{1,6}(?:-\d{1,3}|\d{1,3}))\b"
+)
+_ORDINARY_UPPERCASE_WORDS = {
+    "ALERT",
+    "BREAKING",
+    "EXCLUSIVE",
+    "LIVE",
+    "NEWS",
+    "UPDATE",
+    "URGENT",
+}
 _LATIN_TOKEN = re.compile(r"[A-Za-z]+")
 _PROTECTED_PATTERNS = (
     re.compile(r"```[\s\S]*?```"),
@@ -211,7 +226,7 @@ def _meaningful_lines(paragraph: str) -> list[str]:
 def _sentence_units(paragraph: str) -> int:
     units = 0
     for line in _meaningful_lines(paragraph):
-        boundaries = re.findall(r"[.!?。！？]+", line)
+        boundaries = re.findall(r"(?<!\d)\.(?!\d)|[!?。！？]+", line)
         units += len(boundaries) if boundaries else 1
     return units
 
@@ -258,36 +273,59 @@ def _parse_chinese_integer(token: str) -> int:
     return total + section + number
 
 
-def _numeric_candidates(text: str) -> list[tuple[int, int | str]]:
+def _numeric_candidates(text: str) -> list[tuple[int, int | str, bool]]:
     normalized = text.translate(_FULLWIDTH_DIGITS)
-    candidates: list[tuple[int, int | str]] = []
+    candidates: list[tuple[int, int | str, bool]] = []
+    occupied: list[tuple[int, int]] = []
     for match in _ARABIC_NUMBER.finditer(normalized):
         token = match.group(0).replace(",", "")
         value: int | str = int(token) if "." not in token else token
-        candidates.append((match.start(), value))
+        candidates.append((match.start(), value, True))
+        occupied.append(match.span())
+    decimal_digits = {
+        "零": "0",
+        "〇": "0",
+        "一": "1",
+        "二": "2",
+        "两": "2",
+        "三": "3",
+        "四": "4",
+        "五": "5",
+        "六": "6",
+        "七": "7",
+        "八": "8",
+        "九": "9",
+    }
+    for match in _CHINESE_DECIMAL.finditer(normalized):
+        integer = _parse_chinese_integer(match.group("integer"))
+        fraction = "".join(decimal_digits[char] for char in match.group("fraction"))
+        candidates.append((match.start(), f"{integer}.{fraction}", True))
+        occupied.append(match.span())
     for match in _CHINESE_NUMBER.finditer(normalized):
-        candidates.append((match.start(), _parse_chinese_integer(match.group(0))))
+        start, end = match.span()
+        if any(start < used_end and end > used_start for used_start, used_end in occupied):
+            continue
+        token = match.group(0)
+        candidates.append((match.start(), _parse_chinese_integer(token), len(token) > 1))
     return sorted(candidates)
 
 
 def _has_arabic_number_mismatch(source: str, output: str) -> bool:
+    remaining_output = output.translate(_FULLWIDTH_DIGITS)
+    for concept in _english_number_concepts(source):
+        remaining_output, _ = _consume_number_equivalent(remaining_output, concept)
+
     expected = [int(token) if "." not in token else token for token in _arabic_numbers(source)]
-    candidates = _numeric_candidates(output)
+    candidates = _numeric_candidates(remaining_output)
     position = 0
     for expected_value in expected:
         while position < len(candidates) and candidates[position][1] != expected_value:
             position += 1
         if position == len(candidates):
             return True
-        position += 1
+        candidates.pop(position)
 
-    source_values = list(expected)
-    for output_token in _arabic_numbers(output):
-        output_value: int | str = int(output_token) if "." not in output_token else output_token
-        if output_value not in source_values:
-            return True
-        source_values.remove(output_value)
-    return False
+    return any(strict_extra for _, _, strict_extra in candidates)
 
 
 def _english_number_concepts(text: str) -> list[object]:
@@ -354,7 +392,12 @@ def _remove_allowed_protected_spans(source: str, output: str) -> str:
     for span in extract_protected_spans(output):
         if span in allowed:
             cleaned = cleaned.replace(span, " ")
-    for acronym in set(_SOURCE_ACRONYM.findall(source)):
+    acronyms = {
+        acronym
+        for acronym in _SOURCE_ACRONYM.findall(source)
+        if acronym not in _ORDINARY_UPPERCASE_WORDS
+    }
+    for acronym in acronyms:
         cleaned = cleaned.replace(acronym, " ")
     return cleaned
 
@@ -378,7 +421,10 @@ def find_missing_glossary_terms(
         key=lambda item: len(item[0]),
         reverse=True,
     ):
-        for match in re.finditer(re.escape(source_term), source):
+        prefix = r"(?<!\w)" if source_term[:1].isalnum() else ""
+        suffix = r"(?!\w)" if source_term[-1:].isalnum() else ""
+        pattern = prefix + re.escape(source_term) + suffix
+        for match in re.finditer(pattern, source):
             start, end = match.span()
             if any(start < used_end and end > used_start for used_start, used_end in occupied):
                 continue
@@ -482,6 +528,7 @@ def _concrete_defects(
     output: str,
     target_code: str,
     glossary: dict[str, str],
+    errors: tuple[str, ...],
 ) -> tuple[str, ...]:
     defects = []
     if target_code == "zh":
@@ -493,6 +540,23 @@ def _concrete_defects(
         f"Use this required term: {mapping}"
         for mapping in find_missing_glossary_terms(source, output, glossary)
     )
+    instructions = {
+        "EMPTY_OUTPUT": "Provide a complete translation; the current translation is empty.",
+        "PARAGRAPH_COUNT_MISMATCH": "Preserve all source paragraphs in the same order.",
+        "LINE_STRUCTURE_LOSS": "Preserve every meaningful source line.",
+        "SENTENCE_COUNT_LOSS": "Restore every missing source sentence.",
+        "ARABIC_NUMBER_MISMATCH": (
+            "Preserve every source number exactly and do not add numbers."
+        ),
+        "ENGLISH_NUMBER_MISMATCH": (
+            "Preserve every source number exactly and do not add numbers."
+        ),
+        "OUTPUT_TRUNCATED": "Complete the translation; the previous output was truncated.",
+    }
+    for error in errors:
+        instruction = instructions.get(error)
+        if instruction and instruction not in defects:
+            defects.append(instruction)
     return tuple(defects)
 
 
@@ -501,11 +565,36 @@ def _user_review_notes(
     output: str,
     target_code: str,
     glossary: dict[str, str],
+    errors: tuple[str, ...],
 ) -> tuple[str, ...]:
-    if target_code != "zh":
-        return ()
-    tokens = find_unexpected_latin_tokens(source, output)
-    return (("可能仍有未翻译内容：" + "、".join(tokens)),) if tokens else ()
+    notes = []
+    tokens: tuple[str, ...] = ()
+    if target_code == "zh":
+        tokens = find_unexpected_latin_tokens(source, output)
+        if tokens:
+            notes.append("可能仍有未翻译内容：" + "、".join(tokens))
+    missing_terms = find_missing_glossary_terms(source, output, glossary)
+    if missing_terms and not tokens:
+        notes.append("可能未使用指定术语：" + "、".join(missing_terms))
+    if "EMPTY_OUTPUT" in errors:
+        notes.append("译文为空，请人工检查。")
+    if any(
+        error in errors
+        for error in (
+            "PARAGRAPH_COUNT_MISMATCH",
+            "LINE_STRUCTURE_LOSS",
+            "SENTENCE_COUNT_LOSS",
+        )
+    ):
+        notes.append("可能存在结构或内容缺失，请人工检查。")
+    if any(
+        error in errors
+        for error in ("ARABIC_NUMBER_MISMATCH", "ENGLISH_NUMBER_MISMATCH")
+    ):
+        notes.append("可能存在数字不一致，请人工检查。")
+    if "OUTPUT_TRUNCATED" in errors:
+        notes.append("译文可能被截断，请人工检查。")
+    return tuple(notes)
 
 
 def _repair_messages(
@@ -573,7 +662,13 @@ def run_quality_checked_completion(
             first_result.text,
             first_errors,
             False,
-            _user_review_notes(source, first_result.text, target_code, chunk_glossary),
+            _user_review_notes(
+                source,
+                first_result.text,
+                target_code,
+                chunk_glossary,
+                first_errors,
+            ),
         )
 
     second_result = complete(
@@ -586,6 +681,7 @@ def run_quality_checked_completion(
                 first_result.text,
                 target_code,
                 chunk_glossary,
+                first_errors,
             ),
             chunk_glossary,
         ),
@@ -604,5 +700,11 @@ def run_quality_checked_completion(
         second_result.text,
         second_errors,
         True,
-        _user_review_notes(source, second_result.text, target_code, chunk_glossary),
+        _user_review_notes(
+            source,
+            second_result.text,
+            target_code,
+            chunk_glossary,
+            second_errors,
+        ),
     )

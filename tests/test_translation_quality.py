@@ -60,6 +60,24 @@ class TranslationValidatorTests(unittest.TestCase):
             ("Bessent => 贝森特",),
         )
 
+    def test_glossary_terms_require_token_boundaries(self):
+        self.assertEqual(
+            find_missing_glossary_terms(
+                "The US criticized RUSSIA.",
+                "美国批评了俄罗斯。",
+                {"US": "美国"},
+            ),
+            (),
+        )
+        self.assertEqual(
+            find_missing_glossary_terms(
+                "Iranian officials spoke.",
+                "伊朗官员发表了讲话。",
+                {"Iran": "伊朗"},
+            ),
+            (),
+        )
+
     def test_detects_empty_and_structure_loss(self):
         self.assertEqual(
             validate_translation("Title\nBody.", "", "zh"),
@@ -110,6 +128,44 @@ class TranslationValidatorTests(unittest.TestCase):
         self.assertNotIn(
             "TARGET_SCRIPT_RESIDUAL",
             validate_translation(source, output, "zh"),
+        )
+
+    def test_accepts_digit_bearing_news_acronyms_from_source(self):
+        for acronym in ("G7", "G20", "COP28", "F-16"):
+            with self.subTest(acronym=acronym):
+                source = f"The {acronym} met today."
+                output = f"{acronym}今天举行会议。"
+                self.assertNotIn(
+                    "TARGET_SCRIPT_RESIDUAL",
+                    validate_translation(source, output, "zh"),
+                )
+
+    def test_rejects_ordinary_uppercase_headline_words(self):
+        source = "BREAKING NEWS: Talks began."
+        output = "BREAKING NEWS：会谈开始。"
+        self.assertIn(
+            "TARGET_SCRIPT_RESIDUAL",
+            validate_translation(source, output, "zh"),
+        )
+
+    def test_rejects_extra_chinese_number(self):
+        self.assertIn(
+            "ARABIC_NUMBER_MISMATCH",
+            validate_translation(
+                "18 people attended.",
+                "十八人参加，另有二十人。",
+                "zh",
+            ),
+        )
+
+    def test_accepts_chinese_decimal_equivalent(self):
+        self.assertEqual(
+            validate_translation(
+                "3.5% attended.",
+                "百分之三点五的人参加。",
+                "zh",
+            ),
+            [],
         )
 
     def test_accepts_complete_house_of_terror_article_translation(self):
