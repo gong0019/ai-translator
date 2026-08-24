@@ -266,6 +266,50 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertEqual(crypto_wallet["wallet"], "钱包")
         self.assertEqual(cli.llm.calls, [])
 
+    def test_hardware_and_material_glossaries_require_domain_context(self):
+        cli = self.make_cli(())
+        ordinary_water = cli._build_document_glossary(
+            "The city upgraded its water system after the storm.",
+            "en_to_zh",
+        )
+        hardware = cli._build_document_glossary(
+            "The GPU uses water cooling on a printed circuit board.",
+            "en_to_zh",
+        )
+        materials = cli._build_document_glossary(
+            "The packaging supplier selected polypropylene and polyethylene film.",
+            "en_to_zh",
+        )
+
+        self.assertNotIn("water cooling", ordinary_water)
+        self.assertEqual(hardware["water cooling"], "水冷")
+        self.assertEqual(hardware["printed circuit board"], "印制电路板")
+        self.assertEqual(materials["polypropylene"], "聚丙烯（PP）")
+        self.assertEqual(materials["polyethylene"], "聚乙烯（PE）")
+        self.assertEqual(cli.llm.calls, [])
+
+    def test_cross_border_and_trade_glossaries_require_domain_context(self):
+        cli = self.make_cli(())
+        ordinary_order = cli._build_document_glossary(
+            "The court issued an order after the hearing.",
+            "en_to_zh",
+        )
+        commerce = cli._build_document_glossary(
+            "The Amazon seller completed order fulfillment and issued a refund.",
+            "en_to_zh",
+        )
+        trade = cli._build_document_glossary(
+            "The bill of lading lists FOB terms and a customs declaration.",
+            "en_to_zh",
+        )
+
+        self.assertNotIn("order fulfillment", ordinary_order)
+        self.assertEqual(commerce["order fulfillment"], "订单履约")
+        self.assertEqual(commerce["refund"], "退款")
+        self.assertEqual(trade["bill of lading"], "提单")
+        self.assertEqual(trade["FOB"], "船上交货（FOB）")
+        self.assertEqual(cli.llm.calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()

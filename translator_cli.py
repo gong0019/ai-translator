@@ -54,6 +54,34 @@ TERM_FILES = (
     (os.path.join(SKILLS_DIR, "stocks_terms.json"), ()),
     (os.path.join(SKILLS_DIR, "tech_terms.json"), ()),
     (
+        os.path.join(SKILLS_DIR, "crossborder_ecommerce_terms.json"),
+        (
+            "cross-border e-commerce", "e-commerce", "online marketplace", "Amazon",
+            "marketplace", "FBA", "fulfillment center", "online retail",
+        ),
+    ),
+    (
+        os.path.join(SKILLS_DIR, "trade_terms.json"),
+        (
+            "Incoterms", "FOB", "CIF", "DDP", "bill of lading",
+            "letter of credit", "customs declaration", "HS code",
+        ),
+    ),
+    (
+        os.path.join(SKILLS_DIR, "hardware_terms.json"),
+        (
+            "hardware", "GPU", "CPU", "PCB", "printed circuit board",
+            "semiconductor", "electronics", "heatsink", "thermal interface",
+        ),
+    ),
+    (
+        os.path.join(SKILLS_DIR, "materials_terms.json"),
+        (
+            "packaging", "polymer", "plastic", "resin", "polypropylene",
+            "polyethylene", "PET", "PVC", "ABS", "polycarbonate",
+        ),
+    ),
+    (
         os.path.join(SKILLS_DIR, "blockchain_terms.json"),
         (
             "blockchain", "cryptocurrency", "Bitcoin", "Ethereum", "hash rate",

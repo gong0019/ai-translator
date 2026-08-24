@@ -131,6 +131,10 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | 
 - `skills/zh_to_en.md`：中译英专属 Skill（主语智能补齐、成语隐喻意译）。
 - `skills/news_terms.json`：新闻常用固定术语，与当前文档动态规划的术语表共同使用。
 - `skills/finance_terms.json`、`stocks_terms.json`、`tech_terms.json`、`blockchain_terms.json`：金融经济、股票、计算机、区块链多语种术语库。程序只注入正文中命中的词条；`wallet`、`mining` 等歧义区块链词还要求命中区块链上下文。
+- `skills/crossborder_ecommerce_terms.json`、`trade_terms.json`：跨境电商运营与国际贸易术语库，涵盖履约、提单、Incoterms®、报关单和 HS 编码等。
+- `skills/hardware_terms.json`、`materials_terms.json`：硬件制造及材料包装术语库，涵盖风冷、水冷、PCB/PCBA、PP、PE、PET、PVC、ABS、PC、PA 等；仅在命中领域上下文时注入，避免日常词义被强制替换。
+
+所有词库的来源与维护原则见 [`docs/terminology-sources.md`](docs/terminology-sources.md)。
 
 你可以使用任何文本编辑器随时修改 `skills/` 下的 `.md` 文件，**下次翻译时实时热加载生效，无需重启程序**。
 

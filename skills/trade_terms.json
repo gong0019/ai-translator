@@ -1,0 +1,19 @@
+{
+  "terms": [
+    {"en":"Incoterms","zh":"国际贸易术语解释通则","ja":"インコタームズ","ko":"인코텀즈","de":"Incoterms","fr":"Incoterms","es":"Incoterms","ru":"Инкотермс","it":"Incoterms"},
+    {"en":"free on board","zh":"船上交货（FOB）","ja":"本船渡し（FOB）","ko":"본선 인도（FOB）","de":"frei an Bord（FOB）","fr":"franco à bord（FOB）","es":"franco a bordo（FOB）","ru":"франко-борт（FOB）","it":"franco a bordo（FOB）"},
+    {"en":"FOB","zh":"船上交货（FOB）","ja":"本船渡し（FOB）","ko":"본선 인도（FOB）","de":"frei an Bord（FOB）","fr":"franco à bord（FOB）","es":"franco a bordo（FOB）","ru":"франко-борт（FOB）","it":"franco a bordo（FOB）"},
+    {"en":"cost insurance and freight","zh":"成本加保险费、运费（CIF）","ja":"運賃・保険料込み条件（CIF）","ko":"운임·보험료 포함 인도（CIF）","de":"Kosten, Versicherung und Fracht（CIF）","fr":"coût, assurance et fret（CIF）","es":"coste, seguro y flete（CIF）","ru":"стоимость, страхование и фрахт（CIF）","it":"costo, assicurazione e nolo（CIF）"},
+    {"en":"CIF","zh":"成本加保险费、运费（CIF）","ja":"運賃・保険料込み条件（CIF）","ko":"운임·보험료 포함 인도（CIF）","de":"Kosten, Versicherung und Fracht（CIF）","fr":"coût, assurance et fret（CIF）","es":"coste, seguro y flete（CIF）","ru":"стоимость, страхование и фрахт（CIF）","it":"costo, assicurazione e nolo（CIF）"},
+    {"en":"delivered duty paid","zh":"完税后交货（DDP）","ja":"関税込持込渡し（DDP）","ko":"관세지급인도（DDP）","de":"geliefert verzollt（DDP）","fr":"rendu droits acquittés（DDP）","es":"entregado con derechos pagados（DDP）","ru":"поставка с оплатой пошлин（DDP）","it":"reso sdoganato（DDP）"},
+    {"en":"DDP","zh":"完税后交货（DDP）","ja":"関税込持込渡し（DDP）","ko":"관세지급인도（DDP）","de":"geliefert verzollt（DDP）","fr":"rendu droits acquittés（DDP）","es":"entregado con derechos pagados（DDP）","ru":"поставка с оплатой пошлин（DDP）","it":"reso sdoganato（DDP）"},
+    {"en":"bill of lading","zh":"提单","ja":"船荷証券","ko":"선하증권","de":"Konnossement","fr":"connaissement","es":"conocimiento de embarque","ru":"коносамент","it":"polizza di carico"},
+    {"en":"letter of credit","zh":"信用证","ja":"信用状","ko":"신용장","de":"Akkreditiv","fr":"crédit documentaire","es":"carta de crédito","ru":"аккредитив","it":"lettera di credito"},
+    {"en":"customs declaration","zh":"报关单","ja":"税関申告書","ko":"세관신고서","de":"Zollanmeldung","fr":"déclaration en douane","es":"declaración aduanera","ru":"таможенная декларация","it":"dichiarazione doganale"},
+    {"en":"certificate of origin","zh":"原产地证书","ja":"原産地証明書","ko":"원산지 증명서","de":"Ursprungszeugnis","fr":"certificat d’origine","es":"certificado de origen","ru":"сертификат происхождения","it":"certificato di origine"},
+    {"en":"Harmonized System code","zh":"协调制度编码","ja":"HSコード","ko":"HS 코드","de":"HS-Code","fr":"code du Système harmonisé","es":"código del Sistema Armonizado","ru":"код Гармонизированной системы","it":"codice del Sistema armonizzato"},
+    {"en":"HS code","zh":"协调制度编码","ja":"HSコード","ko":"HS 코드","de":"HS-Code","fr":"code du Système harmonisé","es":"código del Sistema Armonizado","ru":"код Гармонизированной системы","it":"codice del Sistema armonizzato"},
+    {"en":"tariff","zh":"关税","ja":"関税","ko":"관세","de":"Zolltarif","fr":"tarif douanier","es":"arancel","ru":"таможенный тариф","it":"dazio doganale"},
+    {"en":"freight forwarder","zh":"货运代理人","ja":"貨物利用運送業者","ko":"화물운송주선인","de":"Spediteur","fr":"transitaire","es":"transitario","ru":"экспедитор","it":"spedizioniere"}
+  ]
+}

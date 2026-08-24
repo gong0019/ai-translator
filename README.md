@@ -130,7 +130,11 @@ Prompts and linguistic rules are modularized as standalone files under `skills/`
 - `skills/en_to_zh.md`: English-to-Chinese skill (clause restructuring, temporal/conditional pre-positioning).
 - `skills/zh_to_en.md`: Chinese-to-English skill (subject recovery, idiom meaning adaptation).
 - `skills/news_terms.json`: Curated news terminology used together with document-specific term planning.
-- `skills/finance_terms.json`, `stocks_terms.json`, `tech_terms.json`, `blockchain_terms.json`: Multilingual specialist terminology. The runtime selects only terms that occur in the document; ambiguous blockchain words require a blockchain context marker.
+- `skills/finance_terms.json`, `stocks_terms.json`, `tech_terms.json`, `blockchain_terms.json`: Finance, equity, computing, and blockchain terminology. The runtime selects only terms that occur in the document; ambiguous blockchain words require a blockchain context marker.
+- `skills/crossborder_ecommerce_terms.json`, `trade_terms.json`: Marketplace-operations and international-trade terminology, including fulfilment, bills of lading, Incoterms®, customs declarations, and HS codes.
+- `skills/hardware_terms.json`, `materials_terms.json`: Hardware/manufacturing and polymer/packaging terminology, including air/water cooling, PCB/PCBA, PP, PE, PET, PVC, ABS, PC, and PA. Context markers prevent generic uses from forcing a specialist translation.
+
+The source and maintenance policy for these catalogs is documented in [`docs/terminology-sources.md`](docs/terminology-sources.md).
 
 You can edit any `.md` file in `skills/` directly with your preferred editor. Changes take effect on the very next translation without restarting the program.
 

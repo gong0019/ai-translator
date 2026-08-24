@@ -1,0 +1,16 @@
+{
+  "terms": [
+    {"en":"Amazon","zh":"亚马逊","ja":"アマゾン","ko":"아마존","de":"Amazon","fr":"Amazon","es":"Amazon","ru":"Amazon","it":"Amazon"},
+    {"en":"cross-border e-commerce","zh":"跨境电子商务","ja":"越境電子商取引","ko":"국경 간 전자상거래","de":"grenzüberschreitender E-Commerce","fr":"commerce électronique transfrontalier","es":"comercio electrónico transfronterizo","ru":"трансграничная электронная коммерция","it":"commercio elettronico transfrontaliero"},
+    {"en":"online marketplace","zh":"在线交易平台","ja":"オンラインマーケットプレイス","ko":"온라인 마켓플레이스","de":"Online-Marktplatz","fr":"place de marché en ligne","es":"mercado en línea","ru":"онлайн-маркетплейс","it":"marketplace online"},
+    {"en":"marketplace seller","zh":"平台卖家","ja":"マーケットプレイス出品者","ko":"마켓플레이스 판매자","de":"Marktplatzverkäufer","fr":"vendeur sur une place de marché","es":"vendedor de mercado en línea","ru":"продавец на маркетплейсе","it":"venditore su marketplace"},
+    {"en":"order fulfillment","zh":"订单履约","ja":"注文フルフィルメント","ko":"주문 이행","de":"Auftragsabwicklung","fr":"exécution des commandes","es":"gestión de pedidos","ru":"исполнение заказов","it":"evasione degli ordini"},
+    {"en":"fulfillment center","zh":"履约中心","ja":"フルフィルメントセンター","ko":"풀필먼트 센터","de":"Fulfillment-Center","fr":"centre de traitement des commandes","es":"centro logístico","ru":"фулфилмент-центр","it":"centro di evasione"},
+    {"en":"stock keeping unit","zh":"库存量单位","ja":"在庫管理単位","ko":"재고 관리 단위","de":"Lagerhaltungseinheit","fr":"unité de gestion des stocks","es":"unidad de mantenimiento de existencias","ru":"единица складского учёта","it":"unità di gestione delle scorte"},
+    {"en":"product listing","zh":"商品刊登","ja":"商品掲載","ko":"상품 등록","de":"Produktangebot","fr":"fiche produit","es":"ficha de producto","ru":"карточка товара","it":"scheda prodotto"},
+    {"en":"last-mile delivery","zh":"最后一公里配送","ja":"ラストマイル配送","ko":"라스트마일 배송","de":"Zustellung auf der letzten Meile","fr":"livraison du dernier kilomètre","es":"entrega de última milla","ru":"доставка последней мили","it":"consegna dell’ultimo miglio"},
+    {"en":"return","zh":"退货","ja":"返品","ko":"반품","de":"Rücksendung","fr":"retour","es":"devolución","ru":"возврат товара","it":"reso"},
+    {"en":"refund","zh":"退款","ja":"返金","ko":"환불","de":"Rückerstattung","fr":"remboursement","es":"reembolso","ru":"возврат средств","it":"rimborso"},
+    {"en":"chargeback","zh":"拒付","ja":"チャージバック","ko":"차지백","de":"Rückbuchung","fr":"rétrofacturation","es":"contracargo","ru":"чарджбэк","it":"storno di pagamento"}
+  ]
+}

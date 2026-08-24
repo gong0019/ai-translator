@@ -158,6 +158,44 @@ class DocumentTerminologyTests(unittest.TestCase):
             "inflation",
         )
 
+    def test_loads_multilingual_hardware_and_material_terms(self):
+        hardware_path = Path(__file__).parent.parent / "skills" / "hardware_terms.json"
+        materials_path = Path(__file__).parent.parent / "skills" / "materials_terms.json"
+
+        self.assertEqual(
+            load_curated_terms(str(hardware_path), "en_to_zh")["printed circuit board"],
+            "印制电路板",
+        )
+        self.assertEqual(
+            load_curated_terms(str(hardware_path), "zh_to_ja")["水冷"],
+            "水冷却",
+        )
+        self.assertEqual(
+            load_curated_terms(str(materials_path), "en_to_zh")["polypropylene"],
+            "聚丙烯（PP）",
+        )
+        self.assertEqual(
+            load_curated_terms(str(materials_path), "zh_to_en")["聚乙烯（PE）"],
+            "polyethylene",
+        )
+
+    def test_loads_multilingual_cross_border_and_trade_terms(self):
+        commerce_path = Path(__file__).parent.parent / "skills" / "crossborder_ecommerce_terms.json"
+        trade_path = Path(__file__).parent.parent / "skills" / "trade_terms.json"
+
+        self.assertEqual(
+            load_curated_terms(str(commerce_path), "en_to_zh")["order fulfillment"],
+            "订单履约",
+        )
+        self.assertEqual(
+            load_curated_terms(str(trade_path), "en_to_zh")["free on board"],
+            "船上交货（FOB）",
+        )
+        self.assertEqual(
+            load_curated_terms(str(trade_path), "zh_to_en")["提单"],
+            "bill of lading",
+        )
+
     def test_matches_lowercase_curated_terms_that_are_not_proper_nouns(self):
         matches = match_curated_terms(
             "Inflation rose while quantitative easing was discussed.",
