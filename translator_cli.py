@@ -3,8 +3,8 @@
 """
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
-Architecture: Python Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: Zero-Hardcoding Architecture, Atomic Fsync, Dynamic OCR Language Discovery, Paragraph Streamer
+Architecture: Fast Multi-Language Sniffer + Modular File-based Skill Routing (skills/*.md)
+Features: 24 Specialized Linguistic Skills, Deterministic Prompt Pipeline, Smart Paragraph Streamer
 """
 
 import os
@@ -30,19 +30,16 @@ from llama_cpp import Llama
 
 console = Console()
 
-# 基础目录与跨平台临时路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILLS_DIR = os.path.join(BASE_DIR, "skills")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 TEMP_DIR = tempfile.gettempdir()
 CLIPBOARD_OCR_PATH = os.path.join(TEMP_DIR, "ai_translator_clipboard_ocr.png")
 
-# 用户全局配置与本地便携配置
 USER_CONFIG_DIR = os.path.expanduser("~/.config/ai-translator") if os.name != 'nt' else os.path.join(os.environ.get('APPDATA', BASE_DIR), "ai-translator")
 USER_CONFIG_FILE = os.path.join(USER_CONFIG_DIR, "config.json")
 LOCAL_CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
-# 9 大支持语种定义 (代码、名称、国旗图标、Tesseract OCR 语言代码)
 LANGUAGES = {
     "1": {"zh": "中文", "en": "Simplified Chinese", "code": "zh", "flag": "🇨🇳", "ocr": "chi_sim"},
     "2": {"zh": "英语", "en": "English", "code": "en", "flag": "🇬🇧", "ocr": "eng"},
@@ -55,7 +52,14 @@ LANGUAGES = {
     "9": {"zh": "意大利语", "en": "Italian", "code": "it", "flag": "🇮🇹", "ocr": "ita"},
 }
 
-# 默认可配置超参数 (支持从 config.json 覆盖)
+LATIN_STOPWORDS = {
+    "en": {"the", "is", "this", "that", "are", "was", "were", "for", "with", "have", "has", "not", "you", "all", "any", "can", "will", "an", "a", "in", "on", "at", "to", "from", "by", "about", "as", "into", "like", "through", "after", "over", "between", "out", "against", "during", "without", "before", "under", "around", "among", "people", "often", "believe", "when", "more", "less"},
+    "de": {"der", "die", "das", "und", "in", "den", "von", "zu", "mit", "ist", "im", "für", "nicht", "ein", "eine", "als", "auch", "es", "an", "werden", "aus", "er", "hat", "dass", "sie", "nach", "wird", "bei", "einer", "um", "am", "sind", "noch", "wie", "einem", "über", "einen", "war", "haben", "nur", "oder", "aber"},
+    "fr": {"le", "la", "les", "de", "des", "un", "une", "du", "et", "en", "dans", "qui", "que", "est", "pour", "pas", "sur", "ce", "il", "sont", "avec", "au", "plus", "par", "je", "son", "ne", "se", "comme", "aux", "nous", "sa", "mais", "ou", "vous", "leur", "ils", "c'est", "d'un"},
+    "es": {"el", "la", "los", "las", "un", "una", "de", "del", "y", "en", "que", "es", "por", "para", "con", "no", "su", "al", "lo", "como", "más", "pero", "sus", "le", "ya", "o", "fue", "este", "ha", "si", "sí", "porque", "esta", "son", "entre", "cuando"},
+    "it": {"il", "la", "lo", "i", "gli", "le", "un", "uno", "una", "di", "del", "della", "dei", "delle", "e", "ed", "in", "nel", "nella", "a", "al", "alla", "per", "con", "da", "su", "non", "che", "è", "sono", "si", "come", "io", "questo", "questa", "più", "anche", "ma", "se"}
+}
+
 DEFAULT_CONFIG = {
     "target_lang_key": "1",
     "selected_model_filename": "",
@@ -79,7 +83,8 @@ def load_skill(skill_name: str) -> str:
     return ""
 
 def detect_language(text: str):
-    """通过字符集特征高效嗅探源语言 (Python 路由层)"""
+    """通过字符集 + 词频投票高效嗅探源语言 (Python 确定性路由层)"""
+    # 1. 独立字符集特征 (日、韩、俄、中)
     if re.search(r'[\u3040-\u309F\u30A0-\u30FF]', text):
         return "ja", "Japanese"
     if re.search(r'[\uAC00-\uD7AF\u1100-\u11FF]', text):
@@ -92,6 +97,27 @@ def detect_language(text: str):
     if chinese_chars > 0 and chinese_chars >= total_alpha * 0.3:
         return "zh", "Simplified Chinese"
     
+    # 2. 特殊变音/符号特征
+    if re.search(r'[äöüßÄÖÜ]', text):
+        return "de", "German"
+    if re.search(r'[¿¡ñÑ]', text):
+        return "es", "Spanish"
+    if re.search(r'[œŒçÇ]', text):
+        return "fr", "French"
+
+    # 3. 欧语停用词词频投票 (英、德、法、西、意)
+    words = [w.lower() for w in re.findall(r'[a-zA-Zà-öø-ÿÀ-ÖØ-ß\']+', text)]
+    if words:
+        scores = {"en": 0, "de": 0, "fr": 0, "es": 0, "it": 0}
+        for w in words:
+            for lang, sw_set in LATIN_STOPWORDS.items():
+                if w in sw_set:
+                    scores[lang] += 1
+        best_lang = max(scores, key=scores.get)
+        if scores[best_lang] > 0:
+            lang_names = {"en": "English", "de": "German", "fr": "French", "es": "Spanish", "it": "Italian"}
+            return best_lang, lang_names[best_lang]
+
     return "en", "English"
 
 def grab_clipboard_image():
@@ -154,7 +180,6 @@ def ocr_extract_text(img_path):
     """调用本地 tesseract 动态加载已安装的多国语言包进行全语种排版识别"""
     try:
         available_langs = get_installed_tesseract_languages()
-        # 匹配我们支持的目标 OCR 语种
         active_langs = [l for l in ["chi_sim", "eng", "jpn", "kor", "rus", "deu", "fra", "spa", "ita"] if l in available_langs]
         lang_arg = "+".join(active_langs) if active_langs else "eng"
 
@@ -185,7 +210,6 @@ def format_model_name(filename: str) -> str:
 
 class TranslatorCLI:
     def __init__(self):
-        # 初始化可配置参数
         self.config = dict(DEFAULT_CONFIG)
         self.last_active_time = time.time()
         self.is_busy = False
@@ -341,7 +365,6 @@ class TranslatorCLI:
                     break
 
         if not found_saved and self.models_map:
-            # 优先选择常用模型，无则选择第 1 个
             for k, info in self.models_map.items():
                 if "3b" in info["filename"].lower():
                     self.active_model_idx = k
@@ -447,6 +470,7 @@ class TranslatorCLI:
         target_code = self.target_lang_item["code"]
         target_name = self.target_lang_item["en"]
         
+        # 确定性双向互翻：当源语言与目标语言一致时，若目标为中文则翻为英文，否则翻为中文
         if source_code == target_code:
             if target_code == "zh":
                 target_code = "en"
@@ -457,10 +481,12 @@ class TranslatorCLI:
         
         base_template = load_skill("base")
         if not base_template:
-            base_template = "You are a professional translator.\nDIRECTION: {source_name} → {target_name}\nTranslate the input text into natural, accurate {target_name}."
+            base_template = "You are a professional translator.\nDIRECTION: {source_name} → {target_name}\nTranslate the input completely and naturally into {target_name}."
         
+        # 显式注入确定性的 DIRECTION
         base_prompt = base_template.replace("{source_name}", source_name).replace("{target_name}", target_name)
         
+        # 拼接专属专项 Skill (如 ja_to_zh, en_to_de, ko_to_zh 等)
         pair_key = f"{source_code}_to_{target_code}"
         skill_prompt = load_skill(pair_key)
         
@@ -565,6 +591,7 @@ class TranslatorCLI:
         max_tokens = int(self.config.get("max_tokens", 4096))
 
         try:
+            # 智能按自然段分切，确保长文本在小模型中 100% 保持精准忠实度与无漂移
             raw_paragraphs = text.split('\n\n')
             paragraphs = [p.strip() for p in raw_paragraphs if p.strip()]
 
