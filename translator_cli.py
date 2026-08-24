@@ -4,13 +4,14 @@
 AI Terminal Translator (Claude Code CLI Aesthetic)
 Powered by Universal GGUF Engine (Qwen2.5, DeepSeek, Llama, Mistral, etc.) via llama.cpp
 Architecture: Python Language Sniffer + Modular File-based Skill Routing (skills/*.md)
-Features: Dynamic Model Auto-Discovery (models/*.gguf), 1-Min Auto-Idle Sleep, Smart OCR
+Features: Persistent Config (config.json), Dynamic Model Discovery, 1-Min Auto-Idle Sleep, Smart OCR
 """
 
 import os
 import re
 import sys
 import time
+import json
 import gc
 import glob
 import threading
@@ -31,6 +32,7 @@ console = Console()
 BASE_DIR = os.path.dirname(__file__)
 SKILLS_DIR = os.path.join(BASE_DIR, "skills")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
+CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
 LANGUAGES = {
     "1": ("中文", "Simplified Chinese", "zh", "🇨🇳"),
@@ -146,17 +148,20 @@ def format_model_name(filename: str) -> str:
 
 class TranslatorCLI:
     def __init__(self):
+        # 默认配置
         self.target_lang_key = "1"
         self.auto_copy = True
-        
-        # 1 分钟自动休眠释放内存 (秒)
+        self.saved_model_filename = ""
         self.idle_timeout = 60
         self.last_active_time = time.time()
         self.is_busy = False
         self.llm = None
         self.lock = threading.Lock()
 
-        # 动态扫描 models/*.gguf 模型
+        # 读取用户持久化配置 (config.json)
+        self.load_config()
+
+        # 动态扫描 models/*.gguf 模型并激活记忆的模型
         self.models_map = {}
         self.active_model_idx = "1"
         self.refresh_available_models()
@@ -197,6 +202,37 @@ class TranslatorCLI:
         self.watchdog = threading.Thread(target=self._idle_watchdog, daemon=True)
         self.watchdog.start()
 
+    def load_config(self):
+        """从 config.json 读取持久化用户偏好"""
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.target_lang_key = str(data.get("target_lang_key", "1"))
+                    self.auto_copy = bool(data.get("auto_copy", True))
+                    self.saved_model_filename = data.get("selected_model_filename", "")
+                    self.idle_timeout = int(data.get("idle_timeout", 60))
+            except Exception:
+                pass
+
+    def save_config(self):
+        """将用户偏好即时保存到 config.json"""
+        current_fn = ""
+        if self.active_model_idx in self.models_map:
+            current_fn = self.models_map[self.active_model_idx]["filename"]
+            
+        data = {
+            "selected_model_filename": current_fn,
+            "target_lang_key": self.target_lang_key,
+            "auto_copy": self.auto_copy,
+            "idle_timeout": self.idle_timeout
+        }
+        try:
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
     def refresh_available_models(self):
         """自动扫描 models/ 目录下所有的 *.gguf 模型文件并动态编号"""
         os.makedirs(MODELS_DIR, exist_ok=True)
@@ -216,18 +252,27 @@ class TranslatorCLI:
             }
             idx += 1
 
-        # 默认优先选择 3B -> 1.5B -> 7B
-        if self.active_model_idx not in self.models_map:
-            found = False
+        # 优先使用 config.json 中记忆的模型
+        found_saved = False
+        if self.saved_model_filename:
+            for k, info in self.models_map.items():
+                if info["filename"] == self.saved_model_filename:
+                    self.active_model_idx = k
+                    found_saved = True
+                    break
+
+        # 若无记忆或记忆文件已删除，默认优先 3B -> 1.5B -> 7B
+        if not found_saved:
+            found_pref = False
             for pref in ["3b", "1.5b", "7b"]:
                 for k, info in self.models_map.items():
                     if pref in info["filename"].lower():
                         self.active_model_idx = k
-                        found = True
+                        found_pref = True
                         break
-                if found:
+                if found_pref:
                     break
-            if not found and self.models_map:
+            if not found_pref and self.models_map:
                 self.active_model_idx = "1"
 
     def _idle_watchdog(self):
@@ -300,7 +345,7 @@ class TranslatorCLI:
 
     @property
     def target_lang_item(self):
-        return LANGUAGES[self.target_lang_key]
+        return LANGUAGES.get(self.target_lang_key, LANGUAGES["1"])
 
     @property
     def target_lang_display(self):
@@ -372,7 +417,8 @@ class TranslatorCLI:
                 with self.lock:
                     self.active_model_idx = choice
                     self.init_engine()
-                console.print(f"\n[bold green]✓ 成功切换模型为:[/] [yellow]{self.get_current_model_name()}[/]\n")
+                    self.save_config()  # 立即持久化记忆选择
+                console.print(f"\n[bold green]✓ 成功切换模型为:[/] [yellow]{self.get_current_model_name()}[/] [dim](已保存偏好)[/]\n")
             elif choice == self.active_model_idx:
                 console.print("[dim]保持当前模型不变。[/]\n")
             else:
@@ -390,7 +436,8 @@ class TranslatorCLI:
             choice = input("\n请输入语言编号 [1-9]: ").strip()
             if choice in LANGUAGES:
                 self.target_lang_key = choice
-                console.print(f"\n[bold green]✓ 输出语言已变更为:[/] [yellow]{self.target_lang_display}[/]\n")
+                self.save_config()  # 立即持久化记忆选择
+                console.print(f"\n[bold green]✓ 输出语言已变更为:[/] [yellow]{self.target_lang_display}[/] [dim](已保存偏好)[/]\n")
             else:
                 console.print("[bold red]❌ 输入无效，保持原有设置[/]\n")
         except (KeyboardInterrupt, EOFError):
@@ -398,8 +445,9 @@ class TranslatorCLI:
 
     def toggle_copy(self):
         self.auto_copy = not self.auto_copy
+        self.save_config()  # 立即持久化记忆选择
         status = "[green]开启 (ON)[/]" if self.auto_copy else "[red]关闭 (OFF)[/]"
-        console.print(f"\n[bold green]✓ 译文自动同步剪贴板:[/] {status}\n")
+        console.print(f"\n[bold green]✓ 译文自动同步剪贴板:[/] {status} [dim](已保存偏好)[/]\n")
 
     def handle_ocr_and_translate(self, img_path: str):
         img_path = os.path.expanduser(img_path.strip().strip('"').strip("'"))
