@@ -31,7 +31,7 @@ _WORD_WRAP_SUFFIXES = {
     "tion",
 }
 _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
-_ARABIC_NUMBER = re.compile(r"(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?")
+_ARABIC_NUMBER = re.compile(r"(?<![A-Za-z0-9_.])\d+(?:,\d{3})*(?:\.\d+)?")
 _CHINESE_NUMBER = re.compile(r"[零〇一二两三四五六七八九十百千万亿]+")
 _CHINESE_DECIMAL = re.compile(
     r"(?:百分之)?(?P<integer>[零〇一二两三四五六七八九十百千万亿]+)"
