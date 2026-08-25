@@ -1,15 +1,169 @@
 {
   "terms": [
-    {"en":"polypropylene","zh":"聚丙烯（PP）","ja":"ポリプロピレン（PP）","ko":"폴리프로필렌（PP）","de":"Polypropylen（PP）","fr":"polypropylène（PP）","es":"polipropileno（PP）","ru":"полипропилен（PP）","it":"polipropilene（PP）"},
-    {"en":"polyethylene","zh":"聚乙烯（PE）","ja":"ポリエチレン（PE）","ko":"폴리에틸렌（PE）","de":"Polyethylen（PE）","fr":"polyéthylène（PE）","es":"polietileno（PE）","ru":"полиэтилен（PE）","it":"polietilene（PE）"},
-    {"en":"polyethylene terephthalate","zh":"聚对苯二甲酸乙二醇酯（PET）","ja":"ポリエチレンテレフタレート（PET）","ko":"폴리에틸렌 테레프탈레이트（PET）","de":"Polyethylenterephthalat（PET）","fr":"polyéthylène téréphtalate（PET）","es":"tereftalato de polietileno（PET）","ru":"полиэтилентерефталат（PET）","it":"polietilene tereftalato（PET）"},
-    {"en":"polyvinyl chloride","zh":"聚氯乙烯（PVC）","ja":"ポリ塩化ビニル（PVC）","ko":"폴리염화비닐（PVC）","de":"Polyvinylchlorid（PVC）","fr":"polychlorure de vinyle（PVC）","es":"cloruro de polivinilo（PVC）","ru":"поливинилхлорид（PVC）","it":"cloruro di polivinile（PVC）"},
-    {"en":"acrylonitrile butadiene styrene","zh":"丙烯腈-丁二烯-苯乙烯共聚物（ABS）","ja":"アクリロニトリル・ブタジエン・スチレン（ABS）","ko":"아크릴로나이트릴·부타디엔·스타이렌（ABS）","de":"Acrylnitril-Butadien-Styrol（ABS）","fr":"acrylonitrile butadiène styrène（ABS）","es":"acrilonitrilo butadieno estireno（ABS）","ru":"акрилонитрилбутадиенстирол（ABS）","it":"acrilonitrile butadiene stirene（ABS）"},
-    {"en":"polycarbonate","zh":"聚碳酸酯（PC）","ja":"ポリカーボネート（PC）","ko":"폴리카보네이트（PC）","de":"Polycarbonat（PC）","fr":"polycarbonate（PC）","es":"policarbonato（PC）","ru":"поликарбонат（PC）","it":"policarbonato（PC）"},
-    {"en":"polyamide","zh":"聚酰胺（PA）","ja":"ポリアミド（PA）","ko":"폴리아미드（PA）","de":"Polyamid（PA）","fr":"polyamide（PA）","es":"poliamida（PA）","ru":"полиамид（PA）","it":"poliammide（PA）"},
-    {"en":"high-density polyethylene","zh":"高密度聚乙烯（HDPE）","ja":"高密度ポリエチレン（HDPE）","ko":"고밀도 폴리에틸렌（HDPE）","de":"Polyethylen hoher Dichte（HDPE）","fr":"polyéthylène haute densité（HDPE）","es":"polietileno de alta densidad（HDPE）","ru":"полиэтилен высокой плотности（HDPE）","it":"polietilene ad alta densità（HDPE）"},
-    {"en":"low-density polyethylene","zh":"低密度聚乙烯（LDPE）","ja":"低密度ポリエチレン（LDPE）","ko":"저밀도 폴리에틸렌（LDPE）","de":"Polyethylen niedriger Dichte（LDPE）","fr":"polyéthylène basse densité（LDPE）","es":"polietileno de baja densidad（LDPE）","ru":"полиэтилен низкой плотности（LDPE）","it":"polietilene a bassa densità（LDPE）"},
-    {"en":"plastic resin","zh":"塑料树脂","ja":"プラスチック樹脂","ko":"플라스틱 수지","de":"Kunststoffharz","fr":"résine plastique","es":"resina plástica","ru":"пластмассовая смола","it":"resina plastica"},
-    {"en":"packaging film","zh":"包装薄膜","ja":"包装フィルム","ko":"포장 필름","de":"Verpackungsfolie","fr":"film d’emballage","es":"película de embalaje","ru":"упаковочная плёнка","it":"film da imballaggio"}
+    {
+      "en": "polypropylene",
+      "zh": "聚丙烯（PP）",
+      "ja": "ポリプロピレン（PP）",
+      "ko": "폴리프로필렌（PP）",
+      "de": "Polypropylen（PP）",
+      "fr": "polypropylène（PP）",
+      "es": "polipropileno（PP）",
+      "ru": "полипропилен（PP）",
+      "it": "polipropilene（PP）"
+    },
+    {
+      "en": "polyethylene",
+      "zh": "聚乙烯（PE）",
+      "ja": "ポリエチレン（PE）",
+      "ko": "폴리에틸렌（PE）",
+      "de": "Polyethylen（PE）",
+      "fr": "polyéthylène（PE）",
+      "es": "polietileno（PE）",
+      "ru": "полиэтилен（PE）",
+      "it": "polietilene（PE）"
+    },
+    {
+      "en": "polyethylene terephthalate",
+      "zh": "聚对苯二甲酸乙二醇酯（PET）",
+      "ja": "ポリエチレンテレフタレート（PET）",
+      "ko": "폴리에틸렌 테레프탈레이트（PET）",
+      "de": "Polyethylenterephthalat（PET）",
+      "fr": "polyéthylène téréphtalate（PET）",
+      "es": "tereftalato de polietileno（PET）",
+      "ru": "полиэтилентерефталат（PET）",
+      "it": "polietilene tereftalato（PET）"
+    },
+    {
+      "en": "polyvinyl chloride",
+      "zh": "聚氯乙烯（PVC）",
+      "ja": "ポリ塩化ビニル（PVC）",
+      "ko": "폴리염화비닐（PVC）",
+      "de": "Polyvinylchlorid（PVC）",
+      "fr": "polychlorure de vinyle（PVC）",
+      "es": "cloruro de polivinilo（PVC）",
+      "ru": "поливинилхлорид（PVC）",
+      "it": "cloruro di polivinile（PVC）"
+    },
+    {
+      "en": "acrylonitrile butadiene styrene",
+      "zh": "丙烯腈-丁二烯-苯乙烯共聚物（ABS）",
+      "ja": "アクリロニトリル・ブタジエン・スチレン（ABS）",
+      "ko": "아크릴로나이트릴·부타디엔·스타이렌（ABS）",
+      "de": "Acrylnitril-Butadien-Styrol（ABS）",
+      "fr": "acrylonitrile butadiène styrène（ABS）",
+      "es": "acrilonitrilo butadieno estireno（ABS）",
+      "ru": "акрилонитрилбутадиенстирол（ABS）",
+      "it": "acrilonitrile butadiene stirene（ABS）"
+    },
+    {
+      "en": "polycarbonate",
+      "zh": "聚碳酸酯（PC）",
+      "ja": "ポリカーボネート（PC）",
+      "ko": "폴리카보네이트（PC）",
+      "de": "Polycarbonat（PC）",
+      "fr": "polycarbonate（PC）",
+      "es": "policarbonato（PC）",
+      "ru": "поликарбонат（PC）",
+      "it": "policarbonato（PC）"
+    },
+    {
+      "en": "polyamide",
+      "zh": "聚酰胺（PA）",
+      "ja": "ポリアミド（PA）",
+      "ko": "폴리아미드（PA）",
+      "de": "Polyamid（PA）",
+      "fr": "polyamide（PA）",
+      "es": "poliamida（PA）",
+      "ru": "полиамид（PA）",
+      "it": "poliammide（PA）"
+    },
+    {
+      "en": "high-density polyethylene",
+      "zh": "高密度聚乙烯（HDPE）",
+      "ja": "高密度ポリエチレン（HDPE）",
+      "ko": "고밀도 폴리에틸렌（HDPE）",
+      "de": "Polyethylen hoher Dichte（HDPE）",
+      "fr": "polyéthylène haute densité（HDPE）",
+      "es": "polietileno de alta densidad（HDPE）",
+      "ru": "полиэтилен высокой плотности（HDPE）",
+      "it": "polietilene ad alta densità（HDPE）"
+    },
+    {
+      "en": "low-density polyethylene",
+      "zh": "低密度聚乙烯（LDPE）",
+      "ja": "低密度ポリエチレン（LDPE）",
+      "ko": "저밀도 폴리에틸렌（LDPE）",
+      "de": "Polyethylen niedriger Dichte（LDPE）",
+      "fr": "polyéthylène basse densité（LDPE）",
+      "es": "polietileno de baja densidad（LDPE）",
+      "ru": "полиэтилен низкой плотности（LDPE）",
+      "it": "polietilene a bassa densità（LDPE）"
+    },
+    {
+      "en": "plastic resin",
+      "zh": "塑料树脂",
+      "ja": "プラスチック樹脂",
+      "ko": "플라스틱 수지",
+      "de": "Kunststoffharz",
+      "fr": "résine plastique",
+      "es": "resina plástica",
+      "ru": "пластмассовая смола",
+      "it": "resina plastica"
+    },
+    {
+      "en": "packaging film",
+      "zh": "包装薄膜",
+      "ja": "包装フィルム",
+      "ko": "포장 필름",
+      "de": "Verpackungsfolie",
+      "fr": "film d’emballage",
+      "es": "película de embalaje",
+      "ru": "упаковочная плёнка",
+      "it": "film da imballaggio"
+    },
+    {
+      "en": "polystyrene",
+      "zh": "聚苯乙烯（PS）",
+      "ja": "ポリスチレン（PS）",
+      "ko": "폴리스티렌（PS）",
+      "de": "Polystyrol（PS）",
+      "fr": "polystyrène（PS）",
+      "es": "poliestireno（PS）",
+      "ru": "полистирол（ПС）",
+      "it": "polistirene（PS）"
+    },
+    {
+      "en": "polyurethane",
+      "zh": "聚氨酯（PU）",
+      "ja": "ポリウレタン（PU）",
+      "ko": "폴리우레탄（PU）",
+      "de": "Polyurethan（PU）",
+      "fr": "polyuréthane（PU）",
+      "es": "poliuretano（PU）",
+      "ru": "полиуретан（ПУ）",
+      "it": "poliuretano（PU）"
+    },
+    {
+      "en": "polylactic acid",
+      "zh": "聚乳酸可降解塑料（PLA）",
+      "ja": "ポリ乳酸（PLA）",
+      "ko": "폴리락트산/생분해성 수지（PLA）",
+      "de": "Polymilchsäure（PLA）",
+      "fr": "acide polylactique（PLA）",
+      "es": "ácido poliláctico（PLA）",
+      "ru": "полилактид（ПЛА）",
+      "it": "acido polilattico（PLA）"
+    },
+    {
+      "en": "injection molding",
+      "zh": "注塑成型",
+      "ja": "射出成形",
+      "ko": "사출성형",
+      "de": "Spritzgießen",
+      "fr": "moulage par injection",
+      "es": "moldeo por inyección",
+      "ru": "литье под давлением",
+      "it": "stampaggio a iniezione"
+    }
   ]
 }

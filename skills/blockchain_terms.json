@@ -1,15 +1,147 @@
 {
   "terms": [
-    {"en":"blockchain","zh":"区块链","ja":"ブロックチェーン","ko":"블록체인","de":"Blockchain","fr":"chaîne de blocs","es":"cadena de bloques","ru":"блокчейн","it":"blockchain"},
-    {"en":"cryptocurrency","zh":"加密货币","ja":"暗号資産","ko":"암호화폐","de":"Kryptowährung","fr":"cryptomonnaie","es":"criptomoneda","ru":"криптовалюта","it":"criptovaluta"},
-    {"en":"Bitcoin","zh":"比特币","ja":"ビットコイン","ko":"비트코인","de":"Bitcoin","fr":"bitcoin","es":"bitcoin","ru":"биткойн","it":"bitcoin"},
-    {"en":"Ethereum","zh":"以太坊","ja":"イーサリアム","ko":"이더리움","de":"Ethereum","fr":"Ethereum","es":"Ethereum","ru":"Эфириум","it":"Ethereum"},
-    {"en":"mining","zh":"挖矿","ja":"マイニング","ko":"채굴","de":"Mining","fr":"minage","es":"minería","ru":"майнинг","it":"mining"},
-    {"en":"mining rig","zh":"矿机","ja":"マイニングリグ","ko":"채굴기","de":"Mining-Rig","fr":"machine de minage","es":"equipo de minería","ru":"майнинговая установка","it":"impianto di mining"},
-    {"en":"hash rate","zh":"算力","ja":"ハッシュレート","ko":"해시레이트","de":"Hashrate","fr":"taux de hachage","es":"tasa de hash","ru":"хешрейт","it":"tasso di hash"},
-    {"en":"proof of work","zh":"工作量证明","ja":"プルーフ・オブ・ワーク","ko":"작업 증명","de":"Proof of Work","fr":"preuve de travail","es":"prueba de trabajo","ru":"доказательство выполнения работы","it":"proof of work"},
-    {"en":"wallet","zh":"钱包","ja":"ウォレット","ko":"지갑","de":"Wallet","fr":"portefeuille","es":"billetera","ru":"кошелёк","it":"portafoglio"},
-    {"en":"smart contract","zh":"智能合约","ja":"スマートコントラクト","ko":"스마트 계약","de":"Smart Contract","fr":"contrat intelligent","es":"contrato inteligente","ru":"смарт-контракт","it":"contratto intelligente"},
-    {"en":"decentralized finance","zh":"去中心化金融","ja":"分散型金融","ko":"탈중앙화 금융","de":"dezentrale Finanzen","fr":"finance décentralisée","es":"finanzas descentralizadas","ru":"децентрализованные финансы","it":"finanza decentralizzata"}
+    {
+      "en": "blockchain",
+      "zh": "区块链",
+      "ja": "ブロックチェーン",
+      "ko": "블록체인",
+      "de": "Blockchain",
+      "fr": "chaîne de blocs",
+      "es": "cadena de bloques",
+      "ru": "блокчейн",
+      "it": "blockchain"
+    },
+    {
+      "en": "cryptocurrency",
+      "zh": "加密货币",
+      "ja": "暗号資産",
+      "ko": "암호화폐",
+      "de": "Kryptowährung",
+      "fr": "cryptomonnaie",
+      "es": "criptomoneda",
+      "ru": "криптовалюта",
+      "it": "criptovaluta"
+    },
+    {
+      "en": "Bitcoin",
+      "zh": "比特币",
+      "ja": "ビットコイン",
+      "ko": "비트코인",
+      "de": "Bitcoin",
+      "fr": "bitcoin",
+      "es": "bitcoin",
+      "ru": "биткойн",
+      "it": "bitcoin"
+    },
+    {
+      "en": "Ethereum",
+      "zh": "以太坊",
+      "ja": "イーサリアム",
+      "ko": "이더리움",
+      "de": "Ethereum",
+      "fr": "Ethereum",
+      "es": "Ethereum",
+      "ru": "Эфириум",
+      "it": "Ethereum"
+    },
+    {
+      "en": "mining",
+      "zh": "挖矿",
+      "ja": "マイニング",
+      "ko": "채굴",
+      "de": "Mining",
+      "fr": "minage",
+      "es": "minería",
+      "ru": "майнинг",
+      "it": "mining"
+    },
+    {
+      "en": "mining rig",
+      "zh": "矿机",
+      "ja": "マイニングリグ",
+      "ko": "채굴기",
+      "de": "Mining-Rig",
+      "fr": "machine de minage",
+      "es": "equipo de minería",
+      "ru": "майнинговая установка",
+      "it": "impianto di mining"
+    },
+    {
+      "en": "hash rate",
+      "zh": "算力",
+      "ja": "ハッシュレート",
+      "ko": "해시레이트",
+      "de": "Hashrate",
+      "fr": "taux de hachage",
+      "es": "tasa de hash",
+      "ru": "хешрейт",
+      "it": "tasso di hash"
+    },
+    {
+      "en": "proof of work",
+      "zh": "工作量证明",
+      "ja": "プルーフ・オブ・ワーク",
+      "ko": "작업 증명",
+      "de": "Proof of Work",
+      "fr": "preuve de travail",
+      "es": "prueba de trabajo",
+      "ru": "доказательство выполнения работы",
+      "it": "proof of work"
+    },
+    {
+      "en": "wallet",
+      "zh": "钱包",
+      "ja": "ウォレット",
+      "ko": "지갑",
+      "de": "Wallet",
+      "fr": "portefeuille",
+      "es": "billetera",
+      "ru": "кошелёк",
+      "it": "portafoglio"
+    },
+    {
+      "en": "smart contract",
+      "zh": "智能合约",
+      "ja": "スマートコントラクト",
+      "ko": "스마트 계약",
+      "de": "Smart Contract",
+      "fr": "contrat intelligent",
+      "es": "contrato inteligente",
+      "ru": "смарт-контракт",
+      "it": "contratto intelligente"
+    },
+    {
+      "en": "decentralized finance",
+      "zh": "去中心化金融",
+      "ja": "分散型金融",
+      "ko": "탈중앙화 금융",
+      "de": "dezentrale Finanzen",
+      "fr": "finance décentralisée",
+      "es": "finanzas descentralizadas",
+      "ru": "децентрализованные финансы",
+      "it": "finanza decentralizzata"
+    },
+    {
+      "en": "non-fungible token",
+      "zh": "非同质化代币（NFT）",
+      "ja": "非代替性トークン（NFT）",
+      "ko": "대체불가토큰（NFT）",
+      "de": "Non-Fungible Token（NFT）",
+      "fr": "jeton non fongible（NFT）",
+      "es": "token no fungible（NFT）",
+      "ru": "невзаимозаменяемый токен（NFT）",
+      "it": "token non fungibile（NFT）"
+    },
+    {
+      "en": "proof of stake",
+      "zh": "权益证明（PoS）",
+      "ja": "プルーフ・オブ・ステーク（PoS）",
+      "ko": "지분증명（PoS）",
+      "de": "Proof of Stake（PoS）",
+      "fr": "preuve d'enjeu（PoS）",
+      "es": "prueba de participación（PoS）",
+      "ru": "доказательство доли владения（PoS）",
+      "it": "proof of stake（PoS）"
+    }
   ]
 }

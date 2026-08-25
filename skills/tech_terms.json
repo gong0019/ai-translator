@@ -1,14 +1,180 @@
 {
   "terms": [
-    {"en":"artificial intelligence","zh":"人工智能","ja":"人工知能","ko":"인공지능","de":"künstliche Intelligenz","fr":"intelligence artificielle","es":"inteligencia artificial","ru":"искусственный интеллект","it":"intelligenza artificiale"},
-    {"en":"machine learning","zh":"机器学习","ja":"機械学習","ko":"머신러닝","de":"maschinelles Lernen","fr":"apprentissage automatique","es":"aprendizaje automático","ru":"машинное обучение","it":"apprendimento automatico"},
-    {"en":"large language model","zh":"大语言模型","ja":"大規模言語モデル","ko":"대규모 언어 모델","de":"großes Sprachmodell","fr":"grand modèle de langage","es":"modelo de lenguaje de gran tamaño","ru":"большая языковая модель","it":"modello linguistico di grandi dimensioni"},
-    {"en":"cloud computing","zh":"云计算","ja":"クラウドコンピューティング","ko":"클라우드 컴퓨팅","de":"Cloud Computing","fr":"informatique en nuage","es":"computación en la nube","ru":"облачные вычисления","it":"cloud computing"},
-    {"en":"application programming interface","zh":"应用程序编程接口","ja":"アプリケーション・プログラミング・インターフェース","ko":"응용 프로그램 프로그래밍 인터페이스","de":"Programmierschnittstelle","fr":"interface de programmation applicative","es":"interfaz de programación de aplicaciones","ru":"интерфейс прикладного программирования","it":"interfaccia di programmazione delle applicazioni"},
-    {"en":"source code","zh":"源代码","ja":"ソースコード","ko":"소스 코드","de":"Quellcode","fr":"code source","es":"código fuente","ru":"исходный код","it":"codice sorgente"},
-    {"en":"database","zh":"数据库","ja":"データベース","ko":"데이터베이스","de":"Datenbank","fr":"base de données","es":"base de datos","ru":"база данных","it":"base di dati"},
-    {"en":"operating system","zh":"操作系统","ja":"オペレーティングシステム","ko":"운영체제","de":"Betriebssystem","fr":"système d’exploitation","es":"sistema operativo","ru":"операционная система","it":"sistema operativo"},
-    {"en":"encryption","zh":"加密","ja":"暗号化","ko":"암호화","de":"Verschlüsselung","fr":"chiffrement","es":"cifrado","ru":"шифрование","it":"crittografia"},
-    {"en":"zero-day vulnerability","zh":"零日漏洞","ja":"ゼロデイ脆弱性","ko":"제로데이 취약점","de":"Zero-Day-Schwachstelle","fr":"vulnérabilité zero-day","es":"vulnerabilidad de día cero","ru":"уязвимость нулевого дня","it":"vulnerabilità zero-day"}
+    {
+      "en": "artificial intelligence",
+      "zh": "人工智能",
+      "ja": "人工知能",
+      "ko": "인공지능",
+      "de": "künstliche Intelligenz",
+      "fr": "intelligence artificielle",
+      "es": "inteligencia artificial",
+      "ru": "искусственный интеллект",
+      "it": "intelligenza artificiale"
+    },
+    {
+      "en": "machine learning",
+      "zh": "机器学习",
+      "ja": "機械学習",
+      "ko": "머신러닝",
+      "de": "maschinelles Lernen",
+      "fr": "apprentissage automatique",
+      "es": "aprendizaje automático",
+      "ru": "машинное обучение",
+      "it": "apprendimento automatico"
+    },
+    {
+      "en": "large language model",
+      "zh": "大语言模型",
+      "ja": "大規模言語モデル",
+      "ko": "대규모 언어 모델",
+      "de": "großes Sprachmodell",
+      "fr": "grand modèle de langage",
+      "es": "modelo de lenguaje de gran tamaño",
+      "ru": "большая языковая модель",
+      "it": "modello linguistico di grandi dimensioni"
+    },
+    {
+      "en": "cloud computing",
+      "zh": "云计算",
+      "ja": "クラウドコンピューティング",
+      "ko": "클라우드 컴퓨팅",
+      "de": "Cloud Computing",
+      "fr": "informatique en nuage",
+      "es": "computación en la nube",
+      "ru": "облачные вычисления",
+      "it": "cloud computing"
+    },
+    {
+      "en": "application programming interface",
+      "zh": "应用程序编程接口",
+      "ja": "アプリケーション・プログラミング・インターフェース",
+      "ko": "응용 프로그램 프로그래밍 인터페이스",
+      "de": "Programmierschnittstelle",
+      "fr": "interface de programmation applicative",
+      "es": "interfaz de programación de aplicaciones",
+      "ru": "интерфейс прикладного программирования",
+      "it": "interfaccia di programmazione delle applicazioni"
+    },
+    {
+      "en": "source code",
+      "zh": "源代码",
+      "ja": "ソースコード",
+      "ko": "소스 코드",
+      "de": "Quellcode",
+      "fr": "code source",
+      "es": "código fuente",
+      "ru": "исходный код",
+      "it": "codice sorgente"
+    },
+    {
+      "en": "database",
+      "zh": "数据库",
+      "ja": "データベース",
+      "ko": "데이터베이스",
+      "de": "Datenbank",
+      "fr": "base de données",
+      "es": "base de datos",
+      "ru": "база данных",
+      "it": "base di dati"
+    },
+    {
+      "en": "operating system",
+      "zh": "操作系统",
+      "ja": "オペレーティングシステム",
+      "ko": "운영체제",
+      "de": "Betriebssystem",
+      "fr": "système d’exploitation",
+      "es": "sistema operativo",
+      "ru": "операционная система",
+      "it": "sistema operativo"
+    },
+    {
+      "en": "encryption",
+      "zh": "加密",
+      "ja": "暗号化",
+      "ko": "암호화",
+      "de": "Verschlüsselung",
+      "fr": "chiffrement",
+      "es": "cifrado",
+      "ru": "шифрование",
+      "it": "crittografia"
+    },
+    {
+      "en": "zero-day vulnerability",
+      "zh": "零日漏洞",
+      "ja": "ゼロデイ脆弱性",
+      "ko": "제로데이 취약점",
+      "de": "Zero-Day-Schwachstelle",
+      "fr": "vulnérabilité zero-day",
+      "es": "vulnerabilidad de día cero",
+      "ru": "уязвимость нулевого дня",
+      "it": "vulnerabilità zero-day"
+    },
+    {
+      "en": "deep learning",
+      "zh": "深度学习",
+      "ja": "ディープラーニング/深層学習",
+      "ko": "딥러닝",
+      "de": "Deep Learning/tiefes Lernen",
+      "fr": "apprentissage profond",
+      "es": "aprendizaje profundo",
+      "ru": "глубокое обучение",
+      "it": "apprendimento profondo"
+    },
+    {
+      "en": "LLM",
+      "zh": "大语言模型",
+      "ja": "LLM",
+      "ko": "LLM",
+      "de": "LLM",
+      "fr": "LLM",
+      "es": "LLM",
+      "ru": "LLM",
+      "it": "LLM"
+    },
+    {
+      "en": "natural language processing",
+      "zh": "自然语言处理（NLP）",
+      "ja": "自然言語処理（NLP）",
+      "ko": "자연어 처리（NLP）",
+      "de": "Verarbeitung natürlicher Sprache（NLP）",
+      "fr": "traitement du langage naturel（TAL）",
+      "es": "procesamiento del lenguaje natural（PLN）",
+      "ru": "обработка естественного языка（NLP）",
+      "it": "elaborazione del linguaggio naturale（NLP）"
+    },
+    {
+      "en": "microservices",
+      "zh": "微服务架构",
+      "ja": "マイクロサービス",
+      "ko": "마이크로서비스",
+      "de": "Microservices",
+      "fr": "microservices",
+      "es": "microservicios",
+      "ru": "микросервисная архитектура",
+      "it": "microservizi"
+    },
+    {
+      "en": "distributed system",
+      "zh": "分布式系统",
+      "ja": "分散システム",
+      "ko": "분산 시스템",
+      "de": "verteiltes System",
+      "fr": "système distribué",
+      "es": "sistema distribuido",
+      "ru": "распределенная система",
+      "it": "sistema distribuito"
+    },
+    {
+      "en": "cybersecurity",
+      "zh": "网络安全",
+      "ja": "サイバーセキュリティ",
+      "ko": "사이버 보안",
+      "de": "Cybersicherheit",
+      "fr": "cybersécurité",
+      "es": "ciberseguridad",
+      "ru": "кибербезопасность",
+      "it": "sicurezza informatica"
+    }
   ]
 }
