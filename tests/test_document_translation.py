@@ -130,17 +130,24 @@ class DocumentTerminologyTests(unittest.TestCase):
         )
 
     def test_loads_requested_curated_term_pair(self):
-        terms_path = Path(__file__).parent.parent / "skills" / "news_terms.json"
+        terms_path = str(Path(__file__).parent.parent / "skills" / "news_terms.json")
+        english_to_chinese = load_curated_terms(terms_path, "en_to_zh")
+        # 不锁定整个词库内容，只保证方向取对且既有条目不丢。
+        for source_term, target_term in (
+            ("Reuters", "路透社"),
+            ("Financial Times", "《金融时报》"),
+            ("Strait of Hormuz", "霍尔木兹海峡"),
+            ("BBC Scotland News", "英国广播公司苏格兰新闻部"),
+            ("BBC", "BBC"),
+            ("BST", "英国夏令时"),
+        ):
+            self.assertEqual(english_to_chinese[source_term], target_term)
+
+    def test_news_terms_are_available_in_both_directions(self):
+        terms_path = str(Path(__file__).parent.parent / "skills" / "news_terms.json")
+        self.assertEqual(load_curated_terms(terms_path, "zh_to_en")["路透社"], "Reuters")
         self.assertEqual(
-            load_curated_terms(str(terms_path), "en_to_zh"),
-            {
-                "Reuters": "路透社",
-                "Financial Times": "《金融时报》",
-                "Strait of Hormuz": "霍尔木兹海峡",
-                "BBC Scotland News": "英国广播公司苏格兰新闻部",
-                "BBC": "BBC",
-                "BST": "英国夏令时",
-            },
+            load_curated_terms(terms_path, "en_to_ja")["Reuters"], "ロイター通信"
         )
 
     def test_loads_multilingual_specialist_terms_for_requested_pair(self):

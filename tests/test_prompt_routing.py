@@ -57,9 +57,16 @@ class PromptRoutingTests(unittest.TestCase):
         self.assertNotIn("Nevada", prompt)
         self.assertNotIn("wildfire", prompt.lower())
 
-    def test_runtime_prompt_is_compact(self):
-        prompt, _, _ = self.make_cli().build_dynamic_prompt("Bessent spoke to Reuters.")
-        self.assertLess(len(prompt), 2200)
+    def test_runtime_prompt_stays_within_the_chunk_budget(self):
+        # 上限从 2200 提到 3000：en_to_zh 补齐语法契约后由 575 涨到约 2840 字符。
+        # 这是刻意取舍——原先英译中零语法规则。分块预算已改为扣除提示词长度，
+        # 该上限用于防止 skill 无节制膨胀继续挤压源文本空间。
+        for target_key, source in (("1", "Bessent spoke to Reuters."), ("2", "贝森特接受了采访。")):
+            with self.subTest(target=target_key):
+                cli = self.make_cli()
+                cli.config["target_lang_key"] = target_key
+                prompt, _, _ = cli.build_dynamic_prompt(source)
+                self.assertLess(len(prompt), 3000)
 
 
 if __name__ == "__main__":

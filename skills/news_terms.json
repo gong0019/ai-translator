@@ -1,10 +1,29 @@
 {
-  "en_to_zh": {
-    "Reuters": "路透社",
-    "Financial Times": "《金融时报》",
-    "Strait of Hormuz": "霍尔木兹海峡",
-    "BBC Scotland News": "英国广播公司苏格兰新闻部",
-    "BBC": "BBC",
-    "BST": "英国夏令时"
-  }
+  "_comment": "只收录有唯一标准译名的专有名词。人工词库条目是强制校验的，收录存在多种正确译法的普通名词会造成假阳性重译。",
+  "terms": [
+    {"en": "Reuters", "zh": "路透社", "ja": "ロイター通信", "ko": "로이터통신", "de": "Reuters", "fr": "Reuters", "es": "Reuters", "ru": "Рейтер", "it": "Reuters"},
+    {"en": "Associated Press", "zh": "美联社", "ja": "AP通信", "ko": "AP통신", "de": "Associated Press", "fr": "Associated Press", "es": "Associated Press", "ru": "Ассошиэйтед Пресс", "it": "Associated Press"},
+    {"en": "Agence France-Presse", "zh": "法新社", "ja": "フランス通信社", "ko": "AFP통신", "de": "Agence France-Presse", "fr": "Agence France-Presse", "es": "Agence France-Presse", "ru": "Франс Пресс", "it": "Agence France-Presse"},
+    {"en": "Bloomberg", "zh": "彭博社", "ja": "ブルームバーグ", "ko": "블룸버그", "de": "Bloomberg", "fr": "Bloomberg", "es": "Bloomberg", "ru": "Блумберг", "it": "Bloomberg"},
+    {"en": "Xinhua News Agency", "zh": "新华社", "ja": "新華社", "ko": "신화통신", "de": "Nachrichtenagentur Xinhua", "fr": "Agence Chine nouvelle", "es": "Agencia Xinhua", "ru": "Синьхуа", "it": "Agenzia Xinhua"},
+    {"en": "Financial Times", "zh": "《金融时报》", "ja": "フィナンシャル・タイムズ", "ko": "파이낸셜 타임스", "de": "Financial Times", "fr": "Financial Times", "es": "Financial Times", "ru": "Файнэншл таймс", "it": "Financial Times"},
+    {"en": "The Wall Street Journal", "zh": "《华尔街日报》", "ja": "ウォール・ストリート・ジャーナル", "ko": "월스트리트 저널", "de": "The Wall Street Journal", "fr": "The Wall Street Journal", "es": "The Wall Street Journal", "ru": "Уолл-стрит джорнэл", "it": "The Wall Street Journal"},
+    {"en": "The New York Times", "zh": "《纽约时报》", "ja": "ニューヨーク・タイムズ", "ko": "뉴욕 타임스", "de": "The New York Times", "fr": "The New York Times", "es": "The New York Times", "ru": "Нью-Йорк таймс", "it": "The New York Times"},
+    {"en": "The Guardian", "zh": "《卫报》", "ja": "ガーディアン", "ko": "가디언", "de": "The Guardian", "fr": "The Guardian", "es": "The Guardian", "ru": "Гардиан", "it": "The Guardian"},
+    {"en": "The Lancet", "zh": "《柳叶刀》", "ja": "ランセット", "ko": "랜싯", "de": "The Lancet", "fr": "The Lancet", "es": "The Lancet", "ru": "Ланцет", "it": "The Lancet"},
+    {"en": "BBC", "zh": "BBC", "ja": "BBC", "ko": "BBC", "de": "BBC", "fr": "BBC", "es": "BBC", "ru": "Би-би-си", "it": "BBC"},
+    {"en": "BBC Scotland News", "zh": "英国广播公司苏格兰新闻部", "ja": "BBCスコットランドニュース", "ko": "BBC 스코틀랜드 뉴스", "de": "BBC Scotland News", "fr": "BBC Scotland News", "es": "BBC Scotland News", "ru": "Би-би-си Шотландия", "it": "BBC Scotland News"},
+    {"en": "BST", "zh": "英国夏令时", "ja": "英国夏時間", "ko": "영국 서머타임", "de": "Britische Sommerzeit", "fr": "heure d'été britannique", "es": "hora de verano británica", "ru": "Британское летнее время", "it": "ora legale britannica"},
+    {"en": "Strait of Hormuz", "zh": "霍尔木兹海峡", "ja": "ホルムズ海峡", "ko": "호르무즈 해협", "de": "Straße von Hormus", "fr": "détroit d'Ormuz", "es": "estrecho de Ormuz", "ru": "Ормузский пролив", "it": "stretto di Hormuz"},
+    {"en": "United Nations", "zh": "联合国", "ja": "国際連合", "ko": "국제연합", "de": "Vereinte Nationen", "fr": "Nations unies", "es": "Naciones Unidas", "ru": "Организация Объединённых Наций", "it": "Nazioni Unite"},
+    {"en": "Security Council", "zh": "安全理事会", "ja": "安全保障理事会", "ko": "안전보장이사회", "de": "Sicherheitsrat", "fr": "Conseil de sécurité", "es": "Consejo de Seguridad", "ru": "Совет Безопасности", "it": "Consiglio di sicurezza"},
+    {"en": "World Health Organization", "zh": "世界卫生组织", "ja": "世界保健機関", "ko": "세계보건기구", "de": "Weltgesundheitsorganisation", "fr": "Organisation mondiale de la santé", "es": "Organización Mundial de la Salud", "ru": "Всемирная организация здравоохранения", "it": "Organizzazione mondiale della sanità"},
+    {"en": "European Union", "zh": "欧盟", "ja": "欧州連合", "ko": "유럽연합", "de": "Europäische Union", "fr": "Union européenne", "es": "Unión Europea", "ru": "Европейский союз", "it": "Unione europea"},
+    {"en": "NATO", "zh": "北约", "ja": "北大西洋条約機構", "ko": "나토", "de": "NATO", "fr": "OTAN", "es": "OTAN", "ru": "НАТО", "it": "NATO"},
+    {"en": "International Monetary Fund", "zh": "国际货币基金组织", "ja": "国際通貨基金", "ko": "국제통화기금", "de": "Internationaler Währungsfonds", "fr": "Fonds monétaire international", "es": "Fondo Monetario Internacional", "ru": "Международный валютный фонд", "it": "Fondo monetario internazionale"},
+    {"en": "World Bank", "zh": "世界银行", "ja": "世界銀行", "ko": "세계은행", "de": "Weltbank", "fr": "Banque mondiale", "es": "Banco Mundial", "ru": "Всемирный банк", "it": "Banca Mondiale"},
+    {"en": "White House", "zh": "白宫", "ja": "ホワイトハウス", "ko": "백악관", "de": "Weißes Haus", "fr": "Maison-Blanche", "es": "Casa Blanca", "ru": "Белый дом", "it": "Casa Bianca"},
+    {"en": "Pentagon", "zh": "五角大楼", "ja": "国防総省", "ko": "펜타곤", "de": "Pentagon", "fr": "Pentagone", "es": "Pentágono", "ru": "Пентагон", "it": "Pentagono"},
+    {"en": "Federal Reserve", "zh": "美联储", "ja": "連邦準備制度", "ko": "연방준비제도", "de": "Federal Reserve", "fr": "Réserve fédérale", "es": "Reserva Federal", "ru": "Федеральная резервная система", "it": "Federal Reserve"}
+  ]
 }
