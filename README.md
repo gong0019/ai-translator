@@ -156,6 +156,10 @@ Configure the behavior in `config.json` or `~/.config/ai-translator/config.json`
 
 `quality_validation` accepts only `true` or `false`. `quality_retry_limit` accepts only `0` or `1`. Invalid values resolve to `true` and `1`. Automatic clipboard copying remains disabled.
 
+`retry_max_source_tokens` limits repairs to units no larger than this, since a repair is a second full generation and the number check is least reliable on number-dense text. Default 800.
+
+Generation is bounded by the source it translates (about 1.8x the source tokens) rather than always using `max_tokens`. Terminology planning runs only when the document splits into more than one unit — its sole purpose is holding one rendering steady across separate calls.
+
 `repeat_penalty_latin` applies only when the target is English, German, French, Spanish, Italian, or Russian. Those languages build sentences by repeating function words such as `the`, `of`, and `a`, and the main `repeat_penalty` of 1.08 pushes the model to drop articles and prepositions. Chinese, Japanese, and Korean targets keep 1.08. A lower configured value is never raised.
 
 The config file accepts only keys the program knows; stale keys are dropped on the next save.

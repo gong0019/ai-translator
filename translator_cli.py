@@ -133,6 +133,7 @@ DEFAULT_CONFIG = {
     "repeat_penalty": 1.08,
     "repeat_penalty_latin": 1.02,
     "max_tokens": 4096,
+    "retry_max_source_tokens": 800,
     "quality_validation": True,
     "quality_retry_limit": 1,
 }
@@ -147,6 +148,23 @@ def resolve_repeat_penalty(config: dict, target_code: str) -> float:
     if target_code not in ALPHABETIC_OUTPUT_TARGETS:
         return base
     return min(base, float(config.get("repeat_penalty_latin", 1.02)))
+
+
+def resolve_max_tokens(config: dict, source_tokens: int) -> int:
+    """Bound generation by the source it translates.
+
+    A translation runs about as long as its source, so handing the model the
+    whole 4096-token ceiling for a short unit lets a small model ramble to the
+    cap and fills the context window for no reason.
+    """
+    configured = int(config.get("max_tokens", 4096))
+    return max(256, min(configured, int(source_tokens * 1.8) + 96))
+
+
+def allows_repair(config: dict, source_tokens: int) -> bool:
+    """A repair costs a second full generation, so bound it by unit size."""
+    limit = int(config.get("retry_max_source_tokens", 800))
+    return source_tokens <= limit
 
 def get_optimal_threads():
     """获取最适合矩阵计算的物理核心数（避免超线程 L1/L2 缓存抖动）"""
@@ -654,21 +672,27 @@ class TranslatorCLI:
         return final_prompt, source_name, target_name
 
     def _count_tokens(self, text: str) -> int:
+        # 分块规划反复对同一段文本计数，memo 消除重复的 tokenize 调用。
+        cache = getattr(self, "_token_counts", None)
+        if cache is None:
+            cache = self._token_counts = {}
+        cached = cache.get(text)
+        if cached is not None:
+            return cached
+        value = None
         tokenize = getattr(self.llm, "tokenize", None)
         if callable(tokenize):
             try:
-                return len(tokenize(text.encode("utf-8"), add_bos=False))
+                value = len(tokenize(text.encode("utf-8"), add_bos=False))
             except Exception:
-                pass
-        return max(1, len(re.findall(r"\w+|[^\w\s]", text, re.UNICODE)))
+                value = None
+        if value is None:
+            value = max(1, len(re.findall(r"\w+|[^\w\s]", text, re.UNICODE)))
+        cache[text] = value
+        return value
 
-    def _build_document_glossary(self, text: str, pair_key: str):
-        """Return ``(glossary, advisory_terms)`` for the whole document.
-
-        Advisory terms are the ones this model planned on the fly. They still
-        guide translation, but a miss must not force a repair: an isolated gloss
-        for a word like ``Only`` is routinely wrong in context.
-        """
+    def _curated_glossary(self, text: str, pair_key: str):
+        """Read the hand-maintained catalogues. No model call, no generation."""
         candidates = extract_term_candidates(text)
         curated = {}
         for terms_file, context_markers in TERM_FILES:
@@ -681,18 +705,26 @@ class TranslatorCLI:
                 curated.update(load_curated_terms(terms_file, pair_key))
             except (OSError, ValueError, json.JSONDecodeError):
                 continue
-        curated_only = match_curated_terms(text, curated)
-        curated_only.update(parse_glossary_response("{}", candidates, curated))
-        curated_glossary = parse_glossary_response(
-            "{}", tuple(curated_only), curated_only
-        )
-        curated_source_keys = {term.casefold() for term in curated_only}
+        matched = match_curated_terms(text, curated)
+        matched.update(parse_glossary_response("{}", candidates, curated))
+        glossary = parse_glossary_response("{}", tuple(matched), matched)
+        known = {term.casefold() for term in matched}
         unknown = tuple(
-            term for term in candidates if term.casefold() not in curated_source_keys
+            term for term in candidates if term.casefold() not in known
         )
-        if not unknown:
-            return curated_glossary, frozenset()
+        return glossary, matched, unknown
 
+    def _plan_unknown_terms(
+        self, text: str, pair_key: str, matched: dict, unknown, curated_glossary: dict
+    ):
+        """Ask the model to name the repeated unknown terms. One generation.
+
+        Skipped entirely when nothing repeats, because a planned rendering only
+        earns its cost by staying consistent across separate model calls.
+        """
+        requested = rank_planning_candidates(unknown, text)
+        if not requested:
+            return curated_glossary, frozenset()
         request = (
             "Return one JSON object mapping every supplied source term to its "
             f"standard target-language news rendering for {pair_key}. "
@@ -700,22 +732,36 @@ class TranslatorCLI:
             "leave the source name in Latin letters. "
             "Keep the keys exactly unchanged. "
             "Return JSON only.\n\nSOURCE TERMS:\n"
-            + json.dumps(rank_planning_candidates(unknown, text), ensure_ascii=False)
+            + json.dumps(requested, ensure_ascii=False)
         )
         try:
             result = self._collect_completion(
                 [{"role": "user", "content": request}],
                 0.0,
                 float(self.config.get("repeat_penalty", 1.08)),
-                # 这次生成是全流程最慢的一步，候选词已限量，上限随之收紧。
                 min(512, int(self.config.get("max_tokens", 4096))),
             )
-            planned = parse_glossary_response(result.text, unknown, {})
+            planned = parse_glossary_response(result.text, requested, {})
         except Exception:
             return curated_glossary, frozenset()
-        curated_only.update(planned)
-        glossary = parse_glossary_response("{}", tuple(curated_only), curated_only)
+        merged = dict(matched)
+        merged.update(planned)
+        glossary = parse_glossary_response("{}", tuple(merged), merged)
         return glossary, frozenset(glossary) - frozenset(curated_glossary)
+
+    def _build_document_glossary(self, text: str, pair_key: str):
+        """Return ``(glossary, advisory_terms)`` for the whole document.
+
+        Advisory terms are the ones this model planned on the fly. They still
+        guide translation, but a miss must not force a repair: an isolated gloss
+        for a word like ``Only`` is routinely wrong in context.
+        """
+        curated_glossary, matched, unknown = self._curated_glossary(text, pair_key)
+        if not unknown:
+            return curated_glossary, frozenset()
+        return self._plan_unknown_terms(
+            text, pair_key, matched, unknown, curated_glossary
+        )
 
     def _confirm_truncated_input(self) -> bool:
         try:
@@ -846,20 +892,22 @@ class TranslatorCLI:
         start_time = time.time()
 
         temperature = float(self.config.get("temperature", 0.1))
-        max_tokens = int(self.config.get("max_tokens", 4096))
         validation_enabled, retry_limit = normalize_quality_settings(
             self.config.get("quality_validation"),
             self.config.get("quality_retry_limit"),
         )
+        self._token_counts = {}
 
         try:
             _, _, resolved_target_code, pair_key = self._resolve_translation_route(
                 normalized_text
             )
             repeat_penalty = resolve_repeat_penalty(self.config, resolved_target_code)
-            glossary, advisory_terms = self._build_document_glossary(
+            # 人工词库不需要模型，先拿它估算提示词长度并切分单元。
+            glossary, matched, unknown = self._curated_glossary(
                 normalized_text, pair_key
             )
+            advisory_terms = frozenset()
             # 上下文窗口要同时装下系统提示词、源分块和体量相当的译文，
             # 因此分块预算必须先扣掉提示词，否则加长 skill 会撑爆窗口。
             prompt_tokens = self._count_tokens(
@@ -872,6 +920,12 @@ class TranslatorCLI:
                 self._count_tokens,
                 max_source_tokens,
             )
+            # 术语规划的唯一价值是让同一个名字在多次独立调用间保持一致。
+            # 只有一个单元时没有这个问题，那次生成纯属拖慢首字延迟。
+            if len(units) > 1 and unknown:
+                glossary, advisory_terms = self._plan_unknown_terms(
+                    normalized_text, pair_key, matched, unknown, glossary
+                )
             previous_translation = ""
             previous_source = ""
             console.print()
@@ -891,6 +945,11 @@ class TranslatorCLI:
                 )
                 if context:
                     system_prompt = f"{system_prompt}\n\n{context}"
+                unit_tokens = self._count_tokens(unit)
+                unit_max_tokens = resolve_max_tokens(self.config, unit_tokens)
+                unit_retry_limit = (
+                    retry_limit if allows_repair(self.config, unit_tokens) else 0
+                )
                 with console.status(
                     f"[dim cyan]正在翻译第 {unit_index + 1}/{len(units)} 段...[/]",
                     spinner="dots",
@@ -903,10 +962,10 @@ class TranslatorCLI:
                             messages,
                             attempt_temperature,
                             repeat_penalty,
-                            max_tokens,
+                            unit_max_tokens,
                         ),
                         temperature=temperature,
-                        retry_limit=retry_limit,
+                        retry_limit=unit_retry_limit,
                         validation_enabled=validation_enabled,
                         glossary=unit_glossary,
                         previous_output=previous_translation,

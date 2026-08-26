@@ -73,5 +73,22 @@ class ScriptAwareOcrTests(unittest.TestCase):
         )
 
 
+
+class GenerationBudgetTests(unittest.TestCase):
+    def test_generation_is_bounded_by_the_source_it_translates(self):
+        # 短句不该拿到 4096 的上限，否则小模型会一路跑飞并填满上下文。
+        self.assertEqual(translator_cli.resolve_max_tokens(DEFAULT_CONFIG, 20), 256)
+        self.assertEqual(translator_cli.resolve_max_tokens(DEFAULT_CONFIG, 1424), 2659)
+
+    def test_the_configured_ceiling_is_never_exceeded(self):
+        self.assertEqual(
+            translator_cli.resolve_max_tokens({"max_tokens": 512}, 5000), 512
+        )
+
+    def test_a_repair_is_only_attempted_for_a_bounded_unit(self):
+        self.assertTrue(translator_cli.allows_repair(DEFAULT_CONFIG, 250))
+        self.assertTrue(translator_cli.allows_repair(DEFAULT_CONFIG, 800))
+        self.assertFalse(translator_cli.allows_repair(DEFAULT_CONFIG, 801))
+
 if __name__ == "__main__":
     unittest.main()
