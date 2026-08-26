@@ -374,7 +374,12 @@ class TranslatorCLI:
             try:
                 with open(target_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    self.config.update(data)
+                if isinstance(data, dict):
+                    # 只接受 DEFAULT_CONFIG 中的已知配置项，丢弃历史遗留键
+                    # （否则废弃的键会被 save_config 无限期写回配置文件）
+                    self.config.update(
+                        {key: value for key, value in data.items() if key in DEFAULT_CONFIG}
+                    )
             except Exception:
                 pass
 
