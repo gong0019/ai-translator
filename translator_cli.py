@@ -254,12 +254,50 @@ def get_installed_tesseract_languages():
         pass
     return ["chi_sim", "eng"]
 
-def ocr_extract_text(img_path):
-    """调用本地 tesseract 动态加载已安装的多国语言包进行全语种排版识别"""
+_OSD_SCRIPT_LANGUAGES = {
+    "Han": ("chi_sim", "chi_tra"),
+    "HanS": ("chi_sim",),
+    "HanS_vert": ("chi_sim",),
+    "HanT": ("chi_tra",),
+    "Japanese": ("jpn",),
+    "Japanese_vert": ("jpn",),
+    "Hangul": ("kor",),
+    "Hangul_vert": ("kor",),
+    "Cyrillic": ("rus",),
+    "Latin": ("eng", "deu", "fra", "spa", "ita"),
+}
+_ALL_OCR_LANGUAGES = ("chi_sim", "eng", "jpn", "kor", "rus", "deu", "fra", "spa", "ita")
+
+
+def detect_image_script(img_path):
+    """Ask Tesseract which script the page uses before choosing language packs."""
     try:
-        available_langs = get_installed_tesseract_languages()
-        active_langs = [l for l in ["chi_sim", "eng", "jpn", "kor", "rus", "deu", "fra", "spa", "ita"] if l in available_langs]
-        lang_arg = "+".join(active_langs) if active_langs else "eng"
+        res = subprocess.run(
+            ["tesseract", img_path, "stdout", "--psm", "0"],
+            capture_output=True,
+            text=True,
+        )
+        if res.returncode != 0:
+            return ""
+        match = re.search(r"^Script:\s*(\S+)", res.stdout, re.MULTILINE)
+        return match.group(1) if match else ""
+    except Exception:
+        return ""
+
+
+def ocr_extract_text(img_path):
+    """OCR with the packs for the detected script only.
+
+    Passing every installed language at once makes Tesseract weigh CJK and Latin
+    models against each other, which costs both accuracy and speed.
+    """
+    try:
+        available = get_installed_tesseract_languages()
+        preferred = _OSD_SCRIPT_LANGUAGES.get(detect_image_script(img_path), ())
+        active = [lang for lang in preferred if lang in available]
+        if not active:
+            active = [lang for lang in _ALL_OCR_LANGUAGES if lang in available]
+        lang_arg = "+".join(active) if active else "eng"
 
         cmd = ["tesseract", img_path, "stdout", "-l", lang_arg, "--psm", "3"]
         res = subprocess.run(cmd, capture_output=True, text=True)
