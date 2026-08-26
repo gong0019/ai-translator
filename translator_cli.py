@@ -851,8 +851,14 @@ class TranslatorCLI:
         temperature,
         repeat_penalty,
         max_tokens,
+        on_token=None,
     ):
-        """Collect a complete model result without exposing unvalidated tokens."""
+        """Collect a model result, optionally emitting tokens as they arrive.
+
+        Buffering exists so a translation that a repair may replace is never
+        shown. When no repair can follow, there is nothing to hide, and holding
+        the text back just leaves the reader watching a spinner.
+        """
         stream = self.llm.create_chat_completion(
             messages=messages,
             temperature=temperature,
@@ -869,6 +875,8 @@ class TranslatorCLI:
             choice = choices[0]
             token = choice.get("delta", {}).get("content", "")
             if token:
+                if on_token is not None:
+                    on_token(token if text else token.lstrip())
                 text += token
             if choice.get("finish_reason") is not None:
                 finish_reason = choice["finish_reason"]
@@ -950,10 +958,18 @@ class TranslatorCLI:
                 unit_retry_limit = (
                     retry_limit if allows_repair(self.config, unit_tokens) else 0
                 )
-                with console.status(
-                    f"[dim cyan]正在翻译第 {unit_index + 1}/{len(units)} 段...[/]",
-                    spinner="dots",
-                ):
+                # 不会有重译时，译文没有被替换的可能，直接边生成边显示。
+                live = unit_retry_limit == 0
+
+                def emit(token, _written=[]):
+                    if not _written:
+                        _written.append(True)
+                        if separator:
+                            sys.stdout.write(separator)
+                    sys.stdout.write(token)
+                    sys.stdout.flush()
+
+                if live:
                     outcome = run_quality_checked_completion(
                         source=unit,
                         target_code=resolved_target_code,
@@ -963,19 +979,42 @@ class TranslatorCLI:
                             attempt_temperature,
                             repeat_penalty,
                             unit_max_tokens,
+                            on_token=emit,
                         ),
                         temperature=temperature,
-                        retry_limit=unit_retry_limit,
+                        retry_limit=0,
                         validation_enabled=validation_enabled,
                         glossary=unit_glossary,
                         previous_output=previous_translation,
                         advisory_terms=advisory_terms,
                     )
+                else:
+                    with console.status(
+                        f"[dim cyan]正在翻译第 {unit_index + 1}/{len(units)} 段...[/]",
+                        spinner="dots",
+                    ):
+                        outcome = run_quality_checked_completion(
+                            source=unit,
+                            target_code=resolved_target_code,
+                            system_prompt=system_prompt,
+                            complete=lambda messages, attempt_temperature: self._collect_completion(
+                                messages,
+                                attempt_temperature,
+                                repeat_penalty,
+                                unit_max_tokens,
+                            ),
+                            temperature=temperature,
+                            retry_limit=unit_retry_limit,
+                            validation_enabled=validation_enabled,
+                            glossary=unit_glossary,
+                            previous_output=previous_translation,
+                            advisory_terms=advisory_terms,
+                        )
+                    if separator:
+                        sys.stdout.write(separator)
+                    sys.stdout.write(outcome.text.strip())
+                    sys.stdout.flush()
 
-                if separator:
-                    sys.stdout.write(separator)
-                sys.stdout.write(outcome.text.strip())
-                sys.stdout.flush()
                 previous_translation = outcome.text
                 previous_source = unit
 

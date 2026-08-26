@@ -340,3 +340,50 @@ class CLIQualityIntegrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LiveOutputTests(CLIQualityIntegrationTests):
+    class TokenStub:
+        def __init__(self, pieces):
+            self.pieces = pieces
+            self.calls = []
+
+        def tokenize(self, data, add_bos=False):
+            return [0] * (len(data) // 3)
+
+        def create_chat_completion(self, **kwargs):
+            self.calls.append(kwargs)
+
+            def chunks():
+                for piece in self.pieces:
+                    yield {
+                        "choices": [
+                            {"delta": {"content": piece}, "finish_reason": None}
+                        ]
+                    }
+                yield {"choices": [{"delta": {}, "finish_reason": "stop"}]}
+
+            return chunks()
+
+    def writes_for(self, source):
+        cli = self.make_cli(())
+        cli.llm = self.TokenStub(("变压器", "短缺", "成为瓶颈。"))
+        recorded = []
+
+        class Recorder(io.StringIO):
+            def write(self, value):
+                if value.strip():
+                    recorded.append(value)
+                return super().write(value)
+
+        with contextlib.redirect_stdout(Recorder()):
+            cli.stream_translate(source)
+        return [value for value in recorded if "变压器" in value or "短缺" in value]
+
+    def test_a_unit_too_large_to_repair_is_shown_as_it_arrives(self):
+        long_source = " ".join(["Transformer lead times keep growing."] * 200)
+        self.assertGreater(len(self.writes_for(long_source)), 1)
+
+    def test_a_repairable_unit_is_still_withheld_until_validated(self):
+        # 可能被重译替换的译文不得提前显示。
+        self.assertEqual(len(self.writes_for("Lead times keep growing.")), 1)
