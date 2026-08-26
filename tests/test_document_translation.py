@@ -10,6 +10,8 @@ from document_translation import (
     parse_glossary_response,
     plan_paragraph_chunks,
     plan_translation_units,
+    rank_planning_candidates,
+    MAX_PLANNED_TERMS,
 )
 
 
@@ -254,3 +256,61 @@ class TranslationUnitPlanTests(unittest.TestCase):
         self.assertGreater(len(units), 1)
         # 同一行被拆开的片段不得引入换行，否则会伪造出新的行结构。
         self.assertEqual([separator for _, separator in units[1:]], [""] * (len(units) - 1))
+
+
+class PlanningCostTests(unittest.TestCase):
+    def count(self, text):
+        return max(1, len(text.split()))
+
+    def test_title_case_headline_fragments_are_not_terminology(self):
+        source = (
+            "In the News • FERC Moves to Fast-Track AI Data Centers as Power "
+            "Bottleneck Becomes National Priority • DOE Announces Loan "
+            "Commitment to Revive American Nuclear Supply Chain"
+        )
+        candidates = extract_term_candidates(source)
+        for junk in (
+            "Power Bottleneck Becomes National Priority",
+            "Revive American Nuclear Supply Chain",
+            "Track AI Data Centers",
+        ):
+            self.assertNotIn(junk, candidates)
+        self.assertIn("FERC", candidates)
+        self.assertIn("DOE", candidates)
+
+    def test_real_proper_nouns_survive_the_word_cap(self):
+        source = "Scott Bessent wrote about the Strait of Hormuz in the Financial Times."
+        candidates = extract_term_candidates(source)
+        for term in ("Scott Bessent", "Strait of Hormuz", "Financial Times"):
+            self.assertIn(term, candidates)
+
+    def test_only_repeated_terms_are_worth_planning(self):
+        text = (
+            "Canaan shipped the Avalon chip. Canaan said Avalon sold well. "
+            "Settlement Over was a headline fragment. Canaan grew."
+        )
+        planned = rank_planning_candidates(("Canaan", "Avalon", "Settlement Over"), text)
+        self.assertEqual(planned[0], "Canaan")
+        self.assertIn("Avalon", planned)
+        self.assertNotIn("Settlement Over", planned)
+
+    def test_planning_is_capped(self):
+        text = " ".join(f"Term{index} Term{index}" for index in range(30))
+        candidates = tuple(f"Term{index}" for index in range(30))
+        self.assertEqual(
+            len(rank_planning_candidates(candidates, text)), MAX_PLANNED_TERMS
+        )
+
+    def test_only_a_two_line_paragraph_is_split_per_line(self):
+        heading_and_body = "A headline here\nThe body sentence follows."
+        self.assertEqual(
+            [text for text, _ in plan_translation_units(heading_and_body, self.count, 100)],
+            ["A headline here", "The body sentence follows."],
+        )
+
+    def test_a_list_block_stays_in_one_unit(self):
+        # 逐行翻译列表会让每个条目各付一次完整提示词的代价。
+        bullets = "\n".join(f"• Item number {index}" for index in range(6))
+        units = plan_translation_units(bullets, self.count, 100)
+        self.assertEqual(len(units), 1)
+        self.assertEqual(units[0][0], bullets)

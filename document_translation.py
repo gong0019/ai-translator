@@ -18,6 +18,16 @@ _CAPITALIZED_TERM_RE = re.compile(
 _ACRONYM_RE = re.compile(r"[A-Z]{2,}")
 _PERSON_WORD_RE = re.compile(rf"^{_CAPITALIZED_WORD}$")
 _PERSON_TITLES = {"Sheriff"}
+# 标题式大写（Title Case）的整行会让正则吃下整条标题，产出
+# "Power Bottleneck Becomes National Priority" 这类伪术语。真实专有名词
+# 极少超过三个词，用词数上限把标题片段挡在外面。
+_MAX_TERM_WORDS = 3
+# 术语规划要模型逐条生成 JSON 译名，是全流程最慢的一次生成。候选词多时只送
+# 信息量最高的一批，其余交给行内翻译处理。
+MAX_PLANNED_TERMS = 12
+# 只有两行的段落才是"标题 + 正文"这一种会整段丢失的形态。更多行通常是列表，
+# 逐行翻译会让每个条目各付一次完整提示词的代价。
+_MAX_SPLIT_LINES = 2
 _FENCED_JSON_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL)
 # CJK 句号后不跟空格，必须单独成组；拉丁句点仍要求空白或行尾，
 # 否则 "3.5" 和 "U.S." 会被误切。
@@ -60,11 +70,42 @@ def extract_term_candidates(text: str) -> tuple[str, ...]:
                 attested.add(item)
             if " " in item:
                 attested.update(item.split())
+                # 整条标题式大写会被词数上限挡掉，但其中的缩略语是可靠术语，
+                # 单独留下（DOE Announces Loan Commitment -> DOE）。
+                for word in item.split():
+                    if _ACRONYM_RE.fullmatch(word) and word not in order:
+                        order.append(word)
     return tuple(
         item
         for item in order
-        if " " in item or _ACRONYM_RE.fullmatch(item) or item in attested
+        if (
+            len(item.split()) <= _MAX_TERM_WORDS
+            and (" " in item or _ACRONYM_RE.fullmatch(item) or item in attested)
+        )
     )
+
+
+def rank_planning_candidates(
+    candidates: tuple[str, ...], text: str
+) -> tuple[str, ...]:
+    """Keep only the candidates a plan can actually help with.
+
+    A planned glossary exists to hold one rendering steady across chunks, so it
+    is worth nothing for a term that occurs once — the model simply translates
+    it in place. Requiring a repeat also discards the title-case fragments that
+    headline-heavy copy produces ("Settlement Over", "In the News"), which would
+    otherwise crowd out the real entities.
+    """
+    counted = []
+    for term in candidates:
+        prefix = r"(?<!\w)" if term[:1].isalnum() else ""
+        suffix = r"(?!\w)" if term[-1:].isalnum() else ""
+        flags = re.IGNORECASE if term.isascii() else 0
+        occurrences = len(re.findall(prefix + re.escape(term) + suffix, text, flags))
+        if occurrences >= 2:
+            counted.append((occurrences, len(term.split()), len(term), term))
+    counted.sort(reverse=True)
+    return tuple(term for *_, term in counted[:MAX_PLANNED_TERMS])
 
 
 def load_curated_terms(path: str, pair_key: str) -> dict[str, str]:
@@ -218,24 +259,54 @@ def plan_translation_units(
     small model reliably collapses — it renders the heading and silently drops
     the body. Translating each line on its own removes that choice, and the
     preceding-context block keeps the heading visible while the body is done.
+
+    Splitting is limited to two-line paragraphs. Doing it to every
+    paragraph turns a bullet list into one model call per bullet, and each call
+    re-processes the whole system prompt, so a long newsletter costs several
+    times what it should.
     """
     units: list[tuple[str, str]] = []
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
     for paragraph in paragraphs:
         lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
-        for line_index, line in enumerate(lines):
-            pieces = _split_oversized_paragraph(line, count_tokens, max_source_tokens)
+        groups = (
+            [[line] for line in lines]
+            if 2 <= len(lines) <= _MAX_SPLIT_LINES
+            else _batch_lines(lines, count_tokens, max_source_tokens)
+        )
+        for group_index, group in enumerate(groups):
+            block = "\n".join(group)
+            pieces = _split_oversized_paragraph(block, count_tokens, max_source_tokens)
             for piece_index, piece in enumerate(pieces):
                 if not units:
                     separator = ""
                 elif piece_index:
                     separator = ""
-                elif line_index:
+                elif group_index:
                     separator = "\n"
                 else:
                     separator = "\n\n"
                 units.append((piece, separator))
     return units
+
+
+def _batch_lines(
+    lines: list[str],
+    count_tokens: Callable[[str], int],
+    max_source_tokens: int,
+) -> list[list[str]]:
+    groups: list[list[str]] = []
+    current: list[str] = []
+    for line in lines:
+        candidate = "\n".join((*current, line))
+        if current and count_tokens(candidate) > max_source_tokens:
+            groups.append(current)
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        groups.append(current)
+    return groups
 
 
 def plan_paragraph_chunks(

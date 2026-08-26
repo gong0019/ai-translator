@@ -168,12 +168,18 @@ class CLIQualityIntegrationTests(unittest.TestCase):
             "Scott Bessent made the comments.",
         )
         self.assertIn(
+            "- Bessent => 贝森特",
+            translation_call["messages"][0]["content"],
+        )
+        # 术语表只规划一次，但每个单元只注入本单元命中的条目：
+        # Reuters 只出现在第二段，不该塞进第一段的提示词。
+        self.assertNotIn(
             "- Reuters => 路透社",
             translation_call["messages"][0]["content"],
         )
         self.assertIn(
-            "- Bessent => 贝森特",
-            translation_call["messages"][0]["content"],
+            "- Reuters => 路透社",
+            cli.llm.calls[2]["messages"][0]["content"],
         )
         self.assertEqual(
             cli.llm.calls[2]["messages"][1]["content"],
@@ -241,8 +247,9 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         second_prompt = cli.llm.calls[1]["messages"][0]["content"]
         # 第一段没有前文可带。
         self.assertNotIn("PRECEDING CONTEXT", first_prompt)
-        # 术语表仍然跨段共享。
-        self.assertIn("- Reuters => 路透社", second_prompt)
+        # 术语只注入命中它的单元：Reuters 在第一段，不在第二段。
+        self.assertIn("- Reuters => 路透社", first_prompt)
+        self.assertNotIn("DOCUMENT GLOSSARY", second_prompt)
         # 只带最后一句，且明确标注为已翻译、不得重译。
         self.assertIn("PRECEDING CONTEXT", second_prompt)
         self.assertIn("Do not translate or repeat it.", second_prompt)

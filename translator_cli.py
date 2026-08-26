@@ -37,6 +37,7 @@ from document_translation import (
     match_curated_terms,
     parse_glossary_response,
     plan_paragraph_chunks,
+    rank_planning_candidates,
     plan_translation_units,
 )
 from translation_quality import (
@@ -699,14 +700,15 @@ class TranslatorCLI:
             "leave the source name in Latin letters. "
             "Keep the keys exactly unchanged. "
             "Return JSON only.\n\nSOURCE TERMS:\n"
-            + json.dumps(unknown, ensure_ascii=False)
+            + json.dumps(rank_planning_candidates(unknown, text), ensure_ascii=False)
         )
         try:
             result = self._collect_completion(
                 [{"role": "user", "content": request}],
                 0.0,
                 float(self.config.get("repeat_penalty", 1.08)),
-                min(1024, int(self.config.get("max_tokens", 4096))),
+                # 这次生成是全流程最慢的一步，候选词已限量，上限随之收紧。
+                min(512, int(self.config.get("max_tokens", 4096))),
             )
             planned = parse_glossary_response(result.text, unknown, {})
         except Exception:
@@ -876,9 +878,12 @@ class TranslatorCLI:
             console.rule(f"[bold green]Translation ➔ {self.target_lang_display}[/]", style="green")
 
             for unit_index, (unit, separator) in enumerate(units):
+                # 只注入本单元命中的术语。整份文档的术语表会让每个单元都背上
+                # 全部条目，长稿件里这一项就能把提示词吹大好几倍。
+                unit_glossary = match_curated_terms(unit, glossary)
                 system_prompt, _, _ = self.build_dynamic_prompt(
                     unit,
-                    glossary,
+                    unit_glossary,
                 )
                 context = format_previous_context(
                     last_sentence(previous_source),
@@ -903,7 +908,7 @@ class TranslatorCLI:
                         temperature=temperature,
                         retry_limit=retry_limit,
                         validation_enabled=validation_enabled,
-                        glossary=glossary,
+                        glossary=unit_glossary,
                         previous_output=previous_translation,
                         advisory_terms=advisory_terms,
                     )
