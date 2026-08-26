@@ -2,12 +2,7 @@
 # -*- coding: utf-8 -*-
 """Comprehensive 9-Domain Terminology Generator (200+ high-frequency professional terms per catalog)."""
 
-import json
-import os
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SKILLS_DIR = os.path.join(BASE_DIR, "skills")
-os.makedirs(SKILLS_DIR, exist_ok=True)
+from term_catalog_utils import merge_catalog
 
 def save_terms(filename, terms_tuples):
     terms_list = [
@@ -17,10 +12,8 @@ def save_terms(filename, terms_tuples):
         }
         for t in terms_tuples
     ]
-    path = os.path.join(SKILLS_DIR, filename)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"terms": terms_list}, f, ensure_ascii=False, indent=2)
-    print(f"✓ Successfully generated {filename}: {len(terms_list)} terms")
+    total = merge_catalog(filename, terms_list)
+    print(f"✓ Safely merged {filename}: {total} terms")
 
 # 1. 国际贸易与海关物流 (Trade Terms)
 trade_terms = [

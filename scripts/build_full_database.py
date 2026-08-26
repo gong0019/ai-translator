@@ -2,42 +2,12 @@
 # -*- coding: utf-8 -*-
 """Full 9-Language Specialized Terminology Expander (200+ terms per catalog)."""
 
-import json
-from pathlib import Path
+from term_catalog_utils import merge_catalog
 
-SKILLS_DIR = Path("/home/gongchixin/www/qwen-translator/skills")
 
 def merge_terms(filename, new_entries):
-    filepath = SKILLS_DIR / filename
-    existing = []
-    if filepath.exists():
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                d = json.load(f)
-                if isinstance(d.get("terms"), list):
-                    existing = d["terms"]
-        except Exception:
-            pass
-
-    seen = {x["en"].strip().lower() for x in existing if "en" in x}
-    merged = list(existing)
-
-    for item in new_entries:
-        if isinstance(item, tuple):
-            entry = {
-                "en": item[0], "zh": item[1], "ja": item[2], "ko": item[3],
-                "de": item[4], "fr": item[5], "es": item[6], "ru": item[7], "it": item[8]
-            }
-        else:
-            entry = item
-        k = entry["en"].strip().lower()
-        if k and k not in seen:
-            seen.add(k)
-            merged.append(entry)
-
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump({"terms": merged}, f, ensure_ascii=False, indent=2)
-    print(f"✓ {filename}: total {len(merged)} terms")
+    total = merge_catalog(filename, new_entries)
+    print(f"✓ {filename}: total {total} terms")
 
 # ==============================================================================
 # 1. 跨境电商 (crossborder_ecommerce_terms.json) -> 200+

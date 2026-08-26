@@ -136,6 +136,8 @@ Prompts and linguistic rules are modularized as standalone files under `skills/`
 
 The source and maintenance policy for these catalogs is documented in [`docs/terminology-sources.md`](docs/terminology-sources.md).
 
+To validate the catalogs after editing them, run `python3 scripts/build_comprehensive_terms.py`. Catalog maintenance scripts merge new records and preserve existing source terms; see the terminology source document before running them.
+
 You can edit any `.md` file in `skills/` directly with your preferred editor. Changes take effect on the very next translation without restarting the program.
 
 ### Translation Quality Validation
@@ -149,11 +151,13 @@ Configure the behavior in `config.json` or `~/.config/ai-translator/config.json`
 ```json
 {
   "quality_validation": true,
-  "quality_retry_limit": 1
+  "quality_retry_limit": 1,
+  "adaptive_quality_mode": true,
+  "adaptive_quality_min_chunks": 5
 }
 ```
 
-`quality_validation` accepts only `true` or `false`. `quality_retry_limit` accepts only `0` or `1`. Invalid values resolve to `true` and `1`. Automatic clipboard copying remains disabled.
+`quality_validation` accepts only `true` or `false`. `quality_retry_limit` accepts only `0` or `1`. With `adaptive_quality_mode` enabled, documents with at least `adaptive_quality_min_chunks` chunks retry only objective defects: empty or truncated output, structural loss, changed numbers, or repeated chunks. Short text remains in strict retry mode. Invalid adaptive settings fall back to the defaults above. Automatic clipboard copying remains disabled.
 
 ---
 

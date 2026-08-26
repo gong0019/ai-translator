@@ -130,7 +130,32 @@ DEFAULT_CONFIG = {
     "max_tokens": 4096,
     "quality_validation": True,
     "quality_retry_limit": 1,
+    "adaptive_quality_mode": True,
+    "adaptive_quality_min_chunks": 5,
 }
+
+FAST_DOCUMENT_RETRY_ERRORS = frozenset(
+    {
+        "EMPTY_OUTPUT",
+        "PARAGRAPH_COUNT_MISMATCH",
+        "LINE_STRUCTURE_LOSS",
+        "SENTENCE_COUNT_LOSS",
+        "ARABIC_NUMBER_MISMATCH",
+        "ENGLISH_NUMBER_MISMATCH",
+        "OUTPUT_TRUNCATED",
+        "CROSS_CHUNK_REPETITION",
+    }
+)
+
+
+def retryable_errors_for_document(config: dict, chunk_count: int):
+    """Use strict retries for short text and critical-only retries for long documents."""
+    enabled = config.get("adaptive_quality_mode")
+    enabled = enabled if type(enabled) is bool else DEFAULT_CONFIG["adaptive_quality_mode"]
+    minimum = config.get("adaptive_quality_min_chunks")
+    if type(minimum) is not int or minimum < 1:
+        minimum = DEFAULT_CONFIG["adaptive_quality_min_chunks"]
+    return FAST_DOCUMENT_RETRY_ERRORS if enabled and chunk_count >= minimum else None
 
 def get_optimal_threads():
     """获取最适合矩阵计算的物理核心数（避免超线程 L1/L2 缓存抖动）"""
@@ -798,6 +823,7 @@ class TranslatorCLI:
                 max_source_tokens,
                 stream_each_paragraph=True,
             )
+            retryable_errors = retryable_errors_for_document(self.config, len(chunks))
             previous_translation = ""
             console.print()
             console.rule(f"[bold green]Translation ➔ {self.target_lang_display}[/]", style="green")
@@ -826,6 +852,7 @@ class TranslatorCLI:
                         validation_enabled=validation_enabled,
                         glossary=glossary,
                         previous_output=previous_translation,
+                        retryable_errors=retryable_errors,
                     )
 
                 sys.stdout.write(outcome.text)

@@ -136,6 +136,8 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | 
 
 所有词库的来源与维护原则见 [`docs/terminology-sources.md`](docs/terminology-sources.md)。
 
+编辑词库后可执行 `python3 scripts/build_comprehensive_terms.py` 校验必填语种和重复源词。词库维护脚本会合并新增记录并保留已有源词；执行前请先阅读术语来源文档。
+
 你可以使用任何文本编辑器随时修改 `skills/` 下的 `.md` 文件，**下次翻译时实时热加载生效，无需重启程序**。
 
 ### 翻译质量校验
@@ -149,11 +151,13 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | 
 ```json
 {
   "quality_validation": true,
-  "quality_retry_limit": 1
+  "quality_retry_limit": 1,
+  "adaptive_quality_mode": true,
+  "adaptive_quality_min_chunks": 5
 }
 ```
 
-`quality_validation` 只接受 `true` 或 `false`；`quality_retry_limit` 只接受 `0` 或 `1`。其他值固定回退为 `true` 和 `1`。自动复制到剪贴板仍保持关闭。
+`quality_validation` 只接受 `true` 或 `false`；`quality_retry_limit` 只接受 `0` 或 `1`。启用 `adaptive_quality_mode` 后，达到 `adaptive_quality_min_chunks` 的长文只会因空译文、截断、结构缺失、数字变化或重复分段等客观问题重试；短文本仍保持严格重试模式。自适应设置不合法时会回退到以上默认值。自动复制到剪贴板仍保持关闭。
 
 ---
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 import re
-from typing import Callable
+from collections.abc import Callable, Collection
 
 from document_translation import format_glossary
 
@@ -669,6 +669,7 @@ def run_quality_checked_completion(
     validation_enabled: bool = True,
     glossary: dict[str, str] | None = None,
     previous_output: str = "",
+    retryable_errors: Collection[str] | None = None,
 ) -> QualityOutcome:
     """Generate, validate, and perform no more than one repair attempt."""
     chunk_glossary = glossary or {}
@@ -693,7 +694,12 @@ def run_quality_checked_completion(
 
     if not first_errors:
         return QualityOutcome(first_result.text, (), False)
-    if retry_limit != 1:
+    errors_for_retry = (
+        first_errors
+        if retryable_errors is None
+        else tuple(error for error in first_errors if error in retryable_errors)
+    )
+    if retry_limit != 1 or not errors_for_retry:
         return QualityOutcome(
             first_result.text,
             first_errors,
@@ -703,7 +709,7 @@ def run_quality_checked_completion(
                 first_result.text,
                 target_code,
                 chunk_glossary,
-                first_errors,
+                errors_for_retry,
             ),
         )
 

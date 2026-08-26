@@ -245,6 +245,28 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertIn("第 1/2 段", status.call_args_list[0].args[0])
         self.assertIn("第 2/2 段", status.call_args_list[1].args[0])
 
+    def test_long_document_skips_noncritical_retry_but_keeps_each_chunk_streamed(self):
+        cli = self.make_cli(
+            (
+                ("第一段 English。", "stop"),
+                ("第二段 English。", "stop"),
+                ("第三段 English。", "stop"),
+                ("第四段 English。", "stop"),
+                ("第五段 English。", "stop"),
+            )
+        )
+        cli.config.update(
+            {"adaptive_quality_mode": True, "adaptive_quality_min_chunks": 5}
+        )
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            cli.stream_translate("one.\n\ntwo.\n\nthree.\n\nfour.\n\nfive.")
+
+        self.assertEqual(len(cli.llm.calls), 5)
+        self.assertIn("第一段 English。", output.getvalue())
+        self.assertIn("第五段 English。", output.getvalue())
+
     def test_specialist_glossaries_match_lowercase_terms_and_skip_ambiguous_blockchain_words(self):
         cli = self.make_cli(())
         finance = cli._build_document_glossary(
