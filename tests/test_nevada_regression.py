@@ -18,7 +18,7 @@ class NevadaRegressionTests(unittest.TestCase):
         errors = validate_translation(source, invalid, "zh")
         self.assertIn("LINE_STRUCTURE_LOSS", errors)
         self.assertIn("SENTENCE_COUNT_LOSS", errors)
-        self.assertIn("ENGLISH_NUMBER_MISMATCH", errors)
+        self.assertIn("SPELLED_NUMBER_MISMATCH", errors)
         self.assertIn("TARGET_SCRIPT_RESIDUAL", errors)
 
     def test_complete_translation_is_accepted(self):

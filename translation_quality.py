@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 import re
-from typing import Callable
+from typing import Callable, Iterable
 
 from document_translation import format_glossary
 
@@ -32,6 +32,16 @@ _WORD_WRAP_SUFFIXES = {
     "tion",
 }
 _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
+# 柳叶刀等期刊用中点写小数（0·5）。模型规范成 0.5 是正确的，但逐字解析会把
+# 源文读成 [0, 5] 两个数、译文读成一个 0.5，于是正确译文被判为数字不一致。
+# 人名分隔号（斯科特·贝森特）不在数字之间，前后向断言已将其排除。
+_MIDDLE_DOT_DECIMAL = re.compile(r"(?<=\d)[·・‧](?=\d)")
+
+
+def _normalize_digits(text: str) -> str:
+    return _MIDDLE_DOT_DECIMAL.sub(".", text.translate(_FULLWIDTH_DIGITS))
+
+
 _ARABIC_NUMBER = re.compile(r"(?<![A-Za-z0-9_.])\d+(?:,\d{3})*(?:\.\d+)?")
 _CHINESE_NUMBER = re.compile(r"[零〇一二两三四五六七八九十百千万亿]+")
 _CHINESE_DECIMAL = re.compile(
@@ -47,7 +57,27 @@ _CHINESE_QUANTITY_PREFIX = re.compile(
     r"(?:第|约|近|超过|不足|人民币|美元|英镑|欧元|[$￥¥£€]|百分之)$"
 )
 _SOURCE_ACRONYM = re.compile(
-    r"\b(?:[A-Z]{2,5}|[A-Z]{1,6}(?:-\d{1,3}|\d{1,3}))\b"
+    # 科技文献里的缩略语常带小写前缀（cTKR、rTKR、mRNA）、长于 5 个字母
+    # （ISRCTN、RECIST），或与代号、希腊字母连写（RACER-Knee、rVSVΔG-ZEBOV-GP）。
+    # 注册号可以很长（NCT04649489、ISRCTN27624068），digits 不能只留 4 位。
+    r"(?<![A-Za-z0-9])(?:"
+    r"[a-z]{0,2}[A-Z][A-ZΑ-Ω]{1,7}[Α-Ω]?(?:-[A-Za-zΑ-Ω0-9]+)*\d{0,10}"
+    r"|[A-Z]{1,6}-?\d{1,10}"
+    r")(?![A-Za-z0-9])"
+)
+# 这些记号在任何目标语言的译文里都照写，与源文是否逐字相同无关：
+# 模型常把柳叶刀的中点小数 p<0·0001 规范成 p<0.0001，逐字比对会误判为未翻译。
+_NOTATION_PATTERNS = (
+    re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{1,3}\s*[=<>≤≥]\s*[−–-]?[\d.,·]+"),
+    re.compile(
+        r"(?<![A-Za-z0-9])\d[\d.,·]*\s*"
+        r"(?:mg|kg|µg|ng|g|mL|dL|L|IU|mmol|µmol|mmHg|kPa|cm|mm|km|Gy|Sv|Bq)"
+        r"(?:/(?:kg|m2|mL|L|day|h|week))?(?![A-Za-z0-9])"
+    ),
+    re.compile(
+        r"(?<![A-Za-z0-9])[A-Za-z][A-Za-z0-9-]*\.(?:gov|org|com|net|edu|int)"
+        r"(?![A-Za-z0-9])"
+    ),
 )
 _ORDINARY_UPPERCASE_WORDS = {
     "ALERT",
@@ -68,6 +98,8 @@ _PROTECTED_PATTERNS = (
     re.compile(r"\b[A-Za-z]:\\[^\s<>\"'，。！？；：]+"),
     re.compile(r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?"),
     re.compile(r"\{\{?[A-Za-z_][A-Za-z0-9_.-]*\}\}?"),
+    # 统计记号（n=154、p=0·62、p<0.001）在中文科技译文里照写不译。
+    re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{1,3}\s*[=<>≤≥]\s*[−–-]?[\d.·]+"),
 )
 
 _ENGLISH_NUMBER_VALUES = {
@@ -142,6 +174,61 @@ _MAGNITUDE_EQUIVALENTS = {
     "million": ("百万",),
     "billion": ("十亿",),
 }
+_MAGNITUDE_LATIN_EQUIVALENTS = {
+    "hundreds": ("hundreds",),
+    "hundreds_of_thousands": ("hundreds of thousands",),
+    "thousands": ("thousands",),
+    "tens_of_thousands": ("tens of thousands",),
+    "millions": ("millions",),
+    "billions": ("billions",),
+    "hundred": ("hundred",),
+    "thousand": ("thousand",),
+    "million": ("million",),
+    "billion": ("billion",),
+}
+_LATIN_NUMBER_WORDS = {
+    value: word for word, value in reversed(list(_ENGLISH_NUMBER_VALUES.items()))
+}
+_LATIN_MAGNITUDE_PATTERNS = (
+    (r"\btens\s+of\s+thousands\b", "tens_of_thousands"),
+    (r"\bhundreds\s+of\s+thousands\b", "hundreds_of_thousands"),
+    (r"\bhundreds\b", "hundreds"),
+    (r"\bthousands\b", "thousands"),
+    (r"\bmillions\b", "millions"),
+    (r"\bbillions\b", "billions"),
+    (r"\bhundred\b", "hundred"),
+    (r"\bthousand\b", "thousand"),
+    (r"\bmillion\b", "million"),
+    (r"\bbillion\b", "billion"),
+)
+# 长短语必须先匹配，否则"数以万计"会被"数万"之外的短模式切碎。
+_CHINESE_MAGNITUDE_PATTERNS = (
+    ("数以万计", "tens_of_thousands"),
+    ("数十万", "hundreds_of_thousands"),
+    ("数百万", "millions"),
+    ("数十亿", "billions"),
+    ("数万", "tens_of_thousands"),
+    ("数千", "thousands"),
+    ("数百", "hundreds"),
+)
+_CHINESE_MAGNITUDE_FACTORS = {"百": 100, "千": 1000, "万": 10_000, "亿": 100_000_000}
+_ARABIC_MAGNITUDE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*([百千万亿])")
+# 月份名译成数字（August 15 -> 8月15日）会在译文里凭空多出一个数字。
+# 只匹配首字母大写的形式，避免把 may、march 这类普通词当成月份。
+_MONTH_NUMBERS = {
+    "January": 1, "February": 2, "March": 3, "April": 4, "May": 5, "June": 6,
+    "July": 7, "August": 8, "September": 9, "October": 10, "November": 11,
+    "December": 12,
+}
+_MONTH_NAMES = {number: name for name, number in _MONTH_NUMBERS.items()}
+# 量词前的 2 在中文里写作"两"（两组、两例），只认"二"会误判正确译文。
+# _parse_chinese_integer 早已把"两"读作 2，等价物表必须与之一致。
+_CHINESE_NUMBER_ALTERNATES = {2: ("两",)}
+_MONTH_NAME_RE = re.compile(r"\b(" + "|".join(_MONTH_NUMBERS) + r")\b")
+# "8月" 是月份，"12个月" 是时长，量词 个 把两者区分开。
+_CHINESE_MONTH_RE = re.compile(r"(?<!\d)(\d{1,2})\s*月")
+_CJK_TOKEN = re.compile(r"[一-鿿぀-ゟ゠-ヿ가-힯]")
+_CJK_TARGETS = frozenset({"zh", "ja", "ko"})
 
 
 @dataclass(frozen=True)
@@ -240,9 +327,58 @@ def _sentence_units(paragraph: str) -> int:
     return units
 
 
-def _arabic_numbers(text: str) -> list[str]:
-    translated = text.translate(_FULLWIDTH_DIGITS)
-    return [match.group(0).replace(",", "") for match in _ARABIC_NUMBER.finditer(translated)]
+def _overlaps(occupied: list[tuple[int, int]], start: int, end: int) -> bool:
+    return any(start < used_end and end > used_start for used_start, used_end in occupied)
+
+
+def _arabic_magnitude_spans(text: str) -> list[tuple[int, int, int | str]]:
+    """Resolve digit-plus-magnitude compounds such as ``3万`` into 30000.
+
+    Reading the digit alone reports a correct conversion (``3万`` -> ``30,000``)
+    as a defect, and reading the magnitude alone invents a second number.
+    """
+    spans: list[tuple[int, int, int | str]] = []
+    for match in _ARABIC_MAGNITUDE_RE.finditer(text):
+        scaled = float(match.group(1)) * _CHINESE_MAGNITUDE_FACTORS[match.group(2)]
+        value: int | str = int(scaled) if scaled.is_integer() else str(scaled)
+        spans.append((match.start(), match.end(), value))
+    return spans
+
+
+def _month_spans(text: str) -> list[tuple[int, int, int]]:
+    """Locate month expressions in either script.
+
+    ``August`` and ``8月`` denote the same month, but one is a word and the other
+    a digit, so counting them as plain numbers makes every translated date look
+    like an added or missing number.
+    """
+    spans = [
+        (match.start(), match.end(), _MONTH_NUMBERS[match.group(1)])
+        for match in _MONTH_NAME_RE.finditer(text)
+    ]
+    for match in _CHINESE_MONTH_RE.finditer(text):
+        number = int(match.group(1))
+        if 1 <= number <= 12:
+            spans.append((match.start(), match.end(), number))
+    return spans
+
+
+def _arabic_number_values(text: str) -> list[int | str]:
+    normalized = _normalize_digits(text)
+    entries: list[tuple[int, int | str]] = []
+    occupied: list[tuple[int, int]] = [
+        (start, end) for start, end, _ in _month_spans(normalized)
+    ]
+    for start, end, value in _arabic_magnitude_spans(normalized):
+        entries.append((start, value))
+        occupied.append((start, end))
+    for match in _ARABIC_NUMBER.finditer(normalized):
+        start, end = match.span()
+        if _overlaps(occupied, start, end):
+            continue
+        token = match.group(0).replace(",", "")
+        entries.append((start, int(token) if "." not in token else token))
+    return [value for _, value in sorted(entries)]
 
 
 def _parse_chinese_integer(token: str) -> int:
@@ -283,14 +419,22 @@ def _parse_chinese_integer(token: str) -> int:
 
 
 def _numeric_candidates(text: str) -> list[tuple[int, int | str, bool]]:
-    normalized = text.translate(_FULLWIDTH_DIGITS)
+    normalized = _normalize_digits(text)
     candidates: list[tuple[int, int | str, bool]] = []
-    occupied: list[tuple[int, int]] = []
+    occupied: list[tuple[int, int]] = [
+        (start, end) for start, end, _ in _month_spans(normalized)
+    ]
+    for start, end, value in _arabic_magnitude_spans(normalized):
+        candidates.append((start, value, True))
+        occupied.append((start, end))
     for match in _ARABIC_NUMBER.finditer(normalized):
+        start, end = match.span()
+        if _overlaps(occupied, start, end):
+            continue
         token = match.group(0).replace(",", "")
         value: int | str = int(token) if "." not in token else token
-        candidates.append((match.start(), value, True))
-        occupied.append(match.span())
+        candidates.append((start, value, True))
+        occupied.append((start, end))
     decimal_digits = {
         "零": "0",
         "〇": "0",
@@ -312,7 +456,7 @@ def _numeric_candidates(text: str) -> list[tuple[int, int | str, bool]]:
         occupied.append(match.span())
     for match in _CHINESE_NUMBER.finditer(normalized):
         start, end = match.span()
-        if any(start < used_end and end > used_start for used_start, used_end in occupied):
+        if _overlaps(occupied, start, end):
             continue
         token = match.group(0)
         strict_extra = len(token) > 1 and bool(
@@ -323,66 +467,145 @@ def _numeric_candidates(text: str) -> list[tuple[int, int | str, bool]]:
     return sorted(candidates)
 
 
-def _has_arabic_number_mismatch(source: str, output: str) -> bool:
-    remaining_output = output.translate(_FULLWIDTH_DIGITS)
-    for concept in _english_number_concepts(source):
-        remaining_output, _ = _consume_number_equivalent(remaining_output, concept)
+def _has_arabic_number_mismatch(source: str, output: str, target_code: str) -> bool:
+    remaining_output = _normalize_digits(output)
+    for concept in _spelled_number_concepts(source):
+        remaining_output, _ = _consume_number_equivalent(
+            remaining_output, concept, target_code
+        )
 
-    expected = [int(token) if "." not in token else token for token in _arabic_numbers(source)]
     candidates = _numeric_candidates(remaining_output)
-    position = 0
-    for expected_value in expected:
-        while position < len(candidates) and candidates[position][1] != expected_value:
-            position += 1
-        if position == len(candidates):
+    for expected_value in _arabic_number_values(source):
+        # 译文重排数字是正常语序差异，按多重集比对而不是按出现顺序。
+        for position, (_, value, _strict) in enumerate(candidates):
+            if value == expected_value:
+                candidates.pop(position)
+                break
+        else:
             return True
-        candidates.pop(position)
 
     return any(strict_extra for _, _, strict_extra in candidates)
 
 
-def _english_number_concepts(text: str) -> list[object]:
-    lowered = text.lower()
+def _spelled_number_concepts(text: str) -> list[object]:
+    """Collect number words and magnitude phrases from either script."""
+    # 中点小数替换为等长的句点，因此位置偏移仍然有效。
+    text = _normalize_digits(text)
     concepts: list[tuple[int, object]] = []
-    occupied: list[tuple[int, int]] = []
-    phrase_patterns = (
-        (r"\btens\s+of\s+thousands\b", "tens_of_thousands"),
-        (r"\bhundreds\s+of\s+thousands\b", "hundreds_of_thousands"),
-        (r"\bhundreds\b", "hundreds"),
-        (r"\bthousands\b", "thousands"),
-        (r"\bmillions\b", "millions"),
-        (r"\bbillions\b", "billions"),
-        (r"\bhundred\b", "hundred"),
-        (r"\bthousand\b", "thousand"),
-        (r"\bmillion\b", "million"),
-        (r"\bbillion\b", "billion"),
-    )
-    for pattern, concept in phrase_patterns:
+    occupied: list[tuple[int, int]] = [
+        (start, end) for start, end, _ in _arabic_magnitude_spans(text)
+    ]
+    lowered = text.lower()
+    for pattern, concept in _LATIN_MAGNITUDE_PATTERNS:
         for match in re.finditer(pattern, lowered):
             start, end = match.span()
-            if any(start < used_end and end > used_start for used_start, used_end in occupied):
+            if _overlaps(occupied, start, end):
                 continue
             occupied.append((start, end))
             concepts.append((start, concept))
 
+    for phrase, concept in _CHINESE_MAGNITUDE_PATTERNS:
+        for match in re.finditer(re.escape(phrase), text):
+            start, end = match.span()
+            if _overlaps(occupied, start, end):
+                continue
+            occupied.append((start, end))
+            concepts.append((start, concept))
+
+    for start, end, number in _month_spans(text):
+        if _overlaps(occupied, start, end):
+            continue
+        occupied.append((start, end))
+        concepts.append((start, ("month", number)))
+
     word_pattern = re.compile(r"\b(" + "|".join(_ENGLISH_NUMBER_VALUES) + r")\b")
     for match in word_pattern.finditer(lowered):
         start, end = match.span()
-        if any(start < used_end and end > used_start for used_start, used_end in occupied):
+        if _overlaps(occupied, start, end):
             continue
+        occupied.append((start, end))
         concepts.append((start, _ENGLISH_NUMBER_VALUES[match.group(1)]))
+
+    for match in _CHINESE_NUMBER.finditer(text):
+        start, end = match.span()
+        if _overlaps(occupied, start, end):
+            continue
+        # 只接受带量词或数量前缀的中文数字，放过"千万不要""一一回应"这类成语。
+        if not (
+            _CHINESE_QUANTITY_SUFFIX.match(text[end:])
+            or _CHINESE_QUANTITY_PREFIX.search(text[:start])
+        ):
+            continue
+        occupied.append((start, end))
+        concepts.append((start, _parse_chinese_integer(match.group(0))))
     return [concept for _, concept in sorted(concepts)]
 
 
-def _consume_number_equivalent(output: str, concept: object) -> tuple[str, bool]:
-    if isinstance(concept, int):
-        equivalents = (str(concept), _CHINESE_NUMBER_VALUES[concept])
-    else:
-        equivalents = _MAGNITUDE_EQUIVALENTS[str(concept)]
+def _numeric_equivalents(concept: object, target_code: str) -> tuple[str, ...]:
+    """Accept only spellings that are legitimate in the target language.
+
+    Counting an English numeral as satisfied by the English word would let an
+    untranslated ``Six`` pass the number check on a Chinese translation.
+    """
+    spells_cjk = target_code in _CJK_TARGETS
+    if isinstance(concept, tuple) and concept[0] == "month":
+        number = concept[1]
+        if spells_cjk:
+            return (f"{number}月", f"{_CHINESE_NUMBER_VALUES[number]}月")
+        return (_MONTH_NAMES[number],)
+    if not isinstance(concept, int):
+        key = str(concept)
+        return (
+            _MAGNITUDE_EQUIVALENTS[key]
+            if spells_cjk
+            else _MAGNITUDE_LATIN_EQUIVALENTS[key]
+        )
+    equivalents = [str(concept)]
+    spelled = (_CHINESE_NUMBER_VALUES if spells_cjk else _LATIN_NUMBER_WORDS).get(
+        concept
+    )
+    if spelled:
+        equivalents.append(spelled)
+    if spells_cjk:
+        equivalents.extend(_CHINESE_NUMBER_ALTERNATES.get(concept, ()))
+    return tuple(equivalents)
+
+
+def _find_equivalent(output: str, value: str) -> int:
+    """Locate an equivalent without matching inside a longer word or number.
+
+    The head and tail need separate guards. A bare ``2`` must not be taken from
+    inside ``75.2`` — that leaves ``75.`` behind and invents a number — while
+    ``8月`` ends in a CJK character and must still match when a day follows it.
+    """
+    if not value[:1].isascii() or not value[:1].isalnum():
+        return output.find(value)
+
+    def guard(char: str, lookbehind: bool) -> str:
+        direction = "<" if lookbehind else ""
+        if char.isdigit():
+            return f"(?{direction}![A-Za-z0-9.,·])"
+        if char.isascii() and char.isalpha():
+            return f"(?{direction}![A-Za-z])"
+        return ""
+
+    pattern = (
+        guard(value[0], True) + re.escape(value) + guard(value[-1], False)
+    )
+    match = re.search(pattern, output, re.IGNORECASE)
+    return match.start() if match else -1
+
+
+def _consume_number_equivalent(
+    output: str, concept: object, target_code: str
+) -> tuple[str, bool]:
     positions = [
-        (output.find(value), value)
-        for value in equivalents
-        if output.find(value) >= 0
+        (found, value)
+        for found, value in (
+            (_find_equivalent(output, value), value)
+            for value in _numeric_equivalents(concept, target_code)
+        )
+        if found >= 0
     ]
     if not positions:
         return output, False
@@ -390,10 +613,10 @@ def _consume_number_equivalent(output: str, concept: object) -> tuple[str, bool]
     return output[:position] + (" " * len(value)) + output[position + len(value):], True
 
 
-def _has_english_number_mismatch(source: str, output: str) -> bool:
-    remaining = output.translate(_FULLWIDTH_DIGITS)
-    for concept in _english_number_concepts(source):
-        remaining, found = _consume_number_equivalent(remaining, concept)
+def _has_spelled_number_mismatch(source: str, output: str, target_code: str) -> bool:
+    remaining = _normalize_digits(output)
+    for concept in _spelled_number_concepts(source):
+        remaining, found = _consume_number_equivalent(remaining, concept, target_code)
         if not found:
             return True
     return False
@@ -410,8 +633,15 @@ def _remove_allowed_protected_spans(source: str, output: str) -> str:
         for acronym in _SOURCE_ACRONYM.findall(source)
         if acronym not in _ORDINARY_UPPERCASE_WORDS
     }
-    for acronym in acronyms:
-        cleaned = cleaned.replace(acronym, " ")
+    for acronym in sorted(acronyms, key=len, reverse=True):
+        # 必须按词边界替换：裸 str.replace 会把 RECIST 里的 CI 挖成 "RE ST"。
+        cleaned = re.sub(
+            r"(?<![A-Za-z0-9])" + re.escape(acronym) + r"(?![A-Za-z0-9])",
+            " ",
+            cleaned,
+        )
+    for pattern in _NOTATION_PATTERNS:
+        cleaned = pattern.sub(" ", cleaned)
     return cleaned
 
 
@@ -504,19 +734,22 @@ def validate_translation(source: str, output: str, target_code: str) -> list[str
     ):
         errors.append("SENTENCE_COUNT_LOSS")
 
-    if _has_arabic_number_mismatch(normalized_source, normalized_output):
+    if _has_arabic_number_mismatch(normalized_source, normalized_output, target_code):
         errors.append("ARABIC_NUMBER_MISMATCH")
 
-    if _has_english_number_mismatch(normalized_source, normalized_output):
-        errors.append("ENGLISH_NUMBER_MISMATCH")
+    if _has_spelled_number_mismatch(normalized_source, normalized_output, target_code):
+        errors.append("SPELLED_NUMBER_MISMATCH")
 
+    unprotected_output = _remove_allowed_protected_spans(
+        normalized_source,
+        normalized_output,
+    )
     if target_code == "zh":
-        unprotected_output = _remove_allowed_protected_spans(
-            normalized_source,
-            normalized_output,
-        )
         if _LATIN_TOKEN.search(unprotected_output):
             errors.append("TARGET_SCRIPT_RESIDUAL")
+    elif target_code not in _CJK_TARGETS and _CJK_TOKEN.search(unprotected_output):
+        # 日语和韩语目标可以合法使用汉字，只有非 CJK 目标才算残留。
+        errors.append("TARGET_SCRIPT_RESIDUAL")
 
     return errors
 
@@ -577,7 +810,7 @@ def _concrete_defects(
         "ARABIC_NUMBER_MISMATCH": (
             "Preserve every source number exactly and do not add numbers."
         ),
-        "ENGLISH_NUMBER_MISMATCH": (
+        "SPELLED_NUMBER_MISMATCH": (
             "Preserve every source number exactly and do not add numbers."
         ),
         "OUTPUT_TRUNCATED": "Complete the translation; the previous output was truncated.",
@@ -621,7 +854,7 @@ def _user_review_notes(
         notes.append("可能存在结构或内容缺失，请人工检查。")
     if any(
         error in errors
-        for error in ("ARABIC_NUMBER_MISMATCH", "ENGLISH_NUMBER_MISMATCH")
+        for error in ("ARABIC_NUMBER_MISMATCH", "SPELLED_NUMBER_MISMATCH")
     ):
         notes.append("可能存在数字不一致，请人工检查。")
     if "OUTPUT_TRUNCATED" in errors:
@@ -669,9 +902,30 @@ def run_quality_checked_completion(
     validation_enabled: bool = True,
     glossary: dict[str, str] | None = None,
     previous_output: str = "",
+    advisory_terms: Iterable[str] = (),
 ) -> QualityOutcome:
-    """Generate, validate, and perform no more than one repair attempt."""
+    """Generate, validate, and keep one repair only when it strictly improves.
+
+    ``advisory_terms`` name glossary entries the model proposed rather than ones
+    curated by hand. A miss on those is reported to the reader but never forces a
+    repair, because an isolated dictionary gloss is often wrong in context.
+    """
     chunk_glossary = glossary or {}
+    advisory = frozenset(advisory_terms)
+    enforced_glossary = {
+        source_term: target_term
+        for source_term, target_term in chunk_glossary.items()
+        if source_term not in advisory
+    }
+
+    def outcome(text: str, errors: tuple[str, ...], retried: bool) -> QualityOutcome:
+        return QualityOutcome(
+            text,
+            errors,
+            retried,
+            _user_review_notes(source, text, target_code, chunk_glossary, errors),
+        )
+
     first_messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": source},
@@ -685,7 +939,7 @@ def run_quality_checked_completion(
             source,
             first_result,
             target_code,
-            chunk_glossary,
+            enforced_glossary,
             previous_output,
         )
     except Exception:
@@ -694,18 +948,7 @@ def run_quality_checked_completion(
     if not first_errors:
         return QualityOutcome(first_result.text, (), False)
     if retry_limit != 1:
-        return QualityOutcome(
-            first_result.text,
-            first_errors,
-            False,
-            _user_review_notes(
-                source,
-                first_result.text,
-                target_code,
-                chunk_glossary,
-                first_errors,
-            ),
-        )
+        return outcome(first_result.text, first_errors, False)
 
     second_result = complete(
         _repair_messages(
@@ -716,7 +959,7 @@ def run_quality_checked_completion(
                 source,
                 first_result.text,
                 target_code,
-                chunk_glossary,
+                enforced_glossary,
                 first_errors,
             ),
             chunk_glossary,
@@ -728,20 +971,14 @@ def run_quality_checked_completion(
             source,
             second_result,
             target_code,
-            chunk_glossary,
+            enforced_glossary,
             previous_output,
         )
     except Exception:
-        return QualityOutcome(second_result.text, ("VALIDATOR_ERROR",), True)
-    return QualityOutcome(
-        second_result.text,
-        second_errors,
-        True,
-        _user_review_notes(
-            source,
-            second_result.text,
-            target_code,
-            chunk_glossary,
-            second_errors,
-        ),
-    )
+        # 无法证明重译更好时保留第一次结果，宁可不改也不要改坏。
+        return outcome(first_result.text, first_errors, True)
+
+    if set(second_errors) < set(first_errors):
+        return outcome(second_result.text, second_errors, True)
+    # 重译没有严格减少缺陷，可能是模型把修复指令当原文翻译了，丢弃它。
+    return outcome(first_result.text, first_errors, True)

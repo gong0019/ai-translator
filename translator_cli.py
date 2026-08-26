@@ -30,11 +30,14 @@ from llama_cpp import Llama
 from document_translation import (
     extract_term_candidates,
     format_glossary,
+    format_previous_context,
+    last_sentence,
     load_curated_terms,
     looks_likely_truncated,
     match_curated_terms,
     parse_glossary_response,
     plan_paragraph_chunks,
+    plan_translation_units,
 )
 from translation_quality import (
     CompletionResult,
@@ -127,10 +130,22 @@ DEFAULT_CONFIG = {
     "n_ctx": 8192,
     "temperature": 0.1,
     "repeat_penalty": 1.08,
+    "repeat_penalty_latin": 1.02,
     "max_tokens": 4096,
     "quality_validation": True,
     "quality_retry_limit": 1,
 }
+
+# 拉丁与西里尔字母译文靠 the/of/a/в/на 这类功能词的高频重复成句，
+# 1.08 的重复惩罚会推动模型省略冠词和介词，因此这些目标语言单列。
+ALPHABETIC_OUTPUT_TARGETS = frozenset({"en", "de", "fr", "es", "it", "ru"})
+
+
+def resolve_repeat_penalty(config: dict, target_code: str) -> float:
+    base = float(config.get("repeat_penalty", 1.08))
+    if target_code not in ALPHABETIC_OUTPUT_TARGETS:
+        return base
+    return min(base, float(config.get("repeat_penalty_latin", 1.02)))
 
 def get_optimal_threads():
     """获取最适合矩阵计算的物理核心数（避免超线程 L1/L2 缓存抖动）"""
@@ -647,6 +662,12 @@ class TranslatorCLI:
         return max(1, len(re.findall(r"\w+|[^\w\s]", text, re.UNICODE)))
 
     def _build_document_glossary(self, text: str, pair_key: str):
+        """Return ``(glossary, advisory_terms)`` for the whole document.
+
+        Advisory terms are the ones this model planned on the fly. They still
+        guide translation, but a miss must not force a repair: an isolated gloss
+        for a word like ``Only`` is routinely wrong in context.
+        """
         candidates = extract_term_candidates(text)
         curated = {}
         for terms_file, context_markers in TERM_FILES:
@@ -661,12 +682,15 @@ class TranslatorCLI:
                 continue
         curated_only = match_curated_terms(text, curated)
         curated_only.update(parse_glossary_response("{}", candidates, curated))
+        curated_glossary = parse_glossary_response(
+            "{}", tuple(curated_only), curated_only
+        )
         curated_source_keys = {term.casefold() for term in curated_only}
         unknown = tuple(
             term for term in candidates if term.casefold() not in curated_source_keys
         )
         if not unknown:
-            return parse_glossary_response("{}", tuple(curated_only), curated_only)
+            return curated_glossary, frozenset()
 
         request = (
             "Return one JSON object mapping every supplied source term to its "
@@ -685,10 +709,11 @@ class TranslatorCLI:
                 min(1024, int(self.config.get("max_tokens", 4096))),
             )
             planned = parse_glossary_response(result.text, unknown, {})
-            curated_only.update(planned)
-            return parse_glossary_response("{}", tuple(curated_only), curated_only)
         except Exception:
-            return parse_glossary_response("{}", tuple(curated_only), curated_only)
+            return curated_glossary, frozenset()
+        curated_only.update(planned)
+        glossary = parse_glossary_response("{}", tuple(curated_only), curated_only)
+        return glossary, frozenset(glossary) - frozenset(curated_glossary)
 
     def _confirm_truncated_input(self) -> bool:
         try:
@@ -819,7 +844,6 @@ class TranslatorCLI:
         start_time = time.time()
 
         temperature = float(self.config.get("temperature", 0.1))
-        repeat_penalty = float(self.config.get("repeat_penalty", 1.08))
         max_tokens = int(self.config.get("max_tokens", 4096))
         validation_enabled, retry_limit = normalize_quality_settings(
             self.config.get("quality_validation"),
@@ -830,32 +854,44 @@ class TranslatorCLI:
             _, _, resolved_target_code, pair_key = self._resolve_translation_route(
                 normalized_text
             )
-            glossary = self._build_document_glossary(normalized_text, pair_key)
-            max_source_tokens = min(
-                3000,
-                max(256, int(self.config.get("n_ctx", 8192) * 0.4)),
+            repeat_penalty = resolve_repeat_penalty(self.config, resolved_target_code)
+            glossary, advisory_terms = self._build_document_glossary(
+                normalized_text, pair_key
             )
-            chunks = plan_paragraph_chunks(
+            # 上下文窗口要同时装下系统提示词、源分块和体量相当的译文，
+            # 因此分块预算必须先扣掉提示词，否则加长 skill 会撑爆窗口。
+            prompt_tokens = self._count_tokens(
+                self.build_dynamic_prompt(normalized_text, glossary)[0]
+            )
+            available = int(self.config.get("n_ctx", 8192)) - prompt_tokens
+            max_source_tokens = min(3000, max(256, available // 2))
+            units = plan_translation_units(
                 normalized_text,
                 self._count_tokens,
                 max_source_tokens,
-                stream_each_paragraph=True,
             )
             previous_translation = ""
+            previous_source = ""
             console.print()
             console.rule(f"[bold green]Translation ➔ {self.target_lang_display}[/]", style="green")
 
-            for chunk_index, chunk in enumerate(chunks):
+            for unit_index, (unit, separator) in enumerate(units):
                 system_prompt, _, _ = self.build_dynamic_prompt(
-                    chunk,
+                    unit,
                     glossary,
                 )
+                context = format_previous_context(
+                    last_sentence(previous_source),
+                    last_sentence(previous_translation),
+                )
+                if context:
+                    system_prompt = f"{system_prompt}\n\n{context}"
                 with console.status(
-                    f"[dim cyan]正在翻译第 {chunk_index + 1}/{len(chunks)} 段...[/]",
+                    f"[dim cyan]正在翻译第 {unit_index + 1}/{len(units)} 段...[/]",
                     spinner="dots",
                 ):
                     outcome = run_quality_checked_completion(
-                        source=chunk,
+                        source=unit,
                         target_code=resolved_target_code,
                         system_prompt=system_prompt,
                         complete=lambda messages, attempt_temperature: self._collect_completion(
@@ -869,16 +905,18 @@ class TranslatorCLI:
                         validation_enabled=validation_enabled,
                         glossary=glossary,
                         previous_output=previous_translation,
+                        advisory_terms=advisory_terms,
                     )
 
-                sys.stdout.write(outcome.text)
-                if not outcome.text.endswith("\n"):
-                    sys.stdout.write("\n")
+                if separator:
+                    sys.stdout.write(separator)
+                sys.stdout.write(outcome.text.strip())
                 sys.stdout.flush()
                 previous_translation = outcome.text
-                if chunk_index < len(chunks) - 1:
-                    sys.stdout.write("\n")
-                    sys.stdout.flush()
+                previous_source = unit
+
+            sys.stdout.write("\n")
+            sys.stdout.flush()
 
             console.rule("[dim green]END[/]", style="green")
 

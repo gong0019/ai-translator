@@ -13,28 +13,58 @@ _SENTENCE_STARTERS = {
 }
 _CAPITALIZED_WORD = r"(?:[A-Z][a-z]+(?:[A-Z][a-z]+)*|[A-Z]{2,})"
 _CAPITALIZED_TERM_RE = re.compile(
-    rf"\b{_CAPITALIZED_WORD}(?:\s+(?:(?:of|the|and|de|la)\s+)?{_CAPITALIZED_WORD})*\b"
+    rf"\b{_CAPITALIZED_WORD}(?:[ \t]+(?:(?:of|the|and|de|la)[ \t]+)?{_CAPITALIZED_WORD})*\b"
 )
+_ACRONYM_RE = re.compile(r"[A-Z]{2,}")
 _PERSON_WORD_RE = re.compile(rf"^{_CAPITALIZED_WORD}$")
 _PERSON_TITLES = {"Sheriff"}
 _FENCED_JSON_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL)
-_SENTENCE_CHUNK_RE = re.compile(r".+?(?:[.!?。！？]+(?:\s+|$)|$)", re.DOTALL)
+# CJK 句号后不跟空格，必须单独成组；拉丁句点仍要求空白或行尾，
+# 否则 "3.5" 和 "U.S." 会被误切。
+_SENTENCE_CHUNK_RE = re.compile(r".+?(?:[。！？]+\s*|[.!?]+(?:\s+|$)|$)", re.DOTALL)
 _FALLBACK_CHUNK_TOKEN_RE = re.compile(
     r"[\u4e00-\u9fff]|[A-Za-z0-9]+|[^\w\s]|\s+"
 )
 
 
+def _opens_a_sentence(text: str, start: int) -> bool:
+    """Report whether a match sits where any word would be capitalized anyway."""
+    prefix = text[:start].rstrip(" \t")
+    return not prefix or prefix[-1] in ".!?\n"
+
+
 def extract_term_candidates(text: str) -> tuple[str, ...]:
-    candidates = []
+    """Collect glossary candidates from capitalized spans.
+
+    A lone word that is capitalized only because it opens a sentence is not
+    evidence of terminology, so it is kept only when the same word also appears
+    mid-sentence or inside a multi-word candidate. Without this, ordinary words
+    such as ``Only`` or ``Meanwhile`` become mandatory glossary entries and every
+    natural rendering is then reported as a missing term.
+    """
+    order: list[str] = []
+    attested: set[str] = set()
     for match in _CAPITALIZED_TERM_RE.finditer(text):
         words = match.group().split()
+        opens_sentence = _opens_a_sentence(text, match.start())
         while words and (words[0] in _SENTENCE_STARTERS or words[0] in _PERSON_TITLES):
             words.pop(0)
+            opens_sentence = False
         candidate = " ".join(words)
-        for item in re.split(r"\s+and\s+", candidate):
-            if item and item not in candidates:
-                candidates.append(item)
-    return tuple(candidates)
+        for position, item in enumerate(re.split(r"\s+and\s+", candidate)):
+            if not item:
+                continue
+            if item not in order:
+                order.append(item)
+            if position or not opens_sentence:
+                attested.add(item)
+            if " " in item:
+                attested.update(item.split())
+    return tuple(
+        item
+        for item in order
+        if " " in item or _ACRONYM_RE.fullmatch(item) or item in attested
+    )
 
 
 def load_curated_terms(path: str, pair_key: str) -> dict[str, str]:
@@ -134,6 +164,32 @@ def format_glossary(glossary: dict[str, str]) -> str:
     )
 
 
+def last_sentence(text: str, limit: int = 180) -> str:
+    """Return the final sentence, shortened from the left if it is very long."""
+    parts = [part.strip() for part in _SENTENCE_CHUNK_RE.findall(text.strip()) if part.strip()]
+    if not parts:
+        return ""
+    tail = parts[-1]
+    return tail if len(tail) <= limit else "…" + tail[-limit:]
+
+
+def format_previous_context(source_tail: str, translation_tail: str) -> str:
+    """Carry one sentence of context so pronouns and tense survive a chunk break.
+
+    Only the final sentence is passed, and it is labelled as already translated,
+    because handing over a whole paragraph invites the model to translate it a
+    second time.
+    """
+    if not source_tail or not translation_tail:
+        return ""
+    return (
+        "PRECEDING CONTEXT — already translated. Use it only to keep pronouns, "
+        "tense, and wording consistent. Do not translate or repeat it.\n"
+        f"- source: {source_tail}\n"
+        f"- translation: {translation_tail}"
+    )
+
+
 def looks_likely_truncated(text: str, source_code: str) -> bool:
     if source_code != "en":
         return False
@@ -145,6 +201,41 @@ def looks_likely_truncated(text: str, source_code: str) -> bool:
         return False
     final_word = final_match.group(1).lower()
     return len(final_word) <= 2 or final_word in _DANGLING_ENGLISH_WORDS
+
+
+def plan_translation_units(
+    text: str,
+    count_tokens: Callable[[str], int],
+    max_source_tokens: int,
+) -> list[tuple[str, str]]:
+    """Split the document into one translation unit per source line.
+
+    Returns ``(unit_text, separator)`` pairs, where the separator is what to emit
+    before the unit's translation: ``""`` to continue the current line, ``"\\n"``
+    for the next line of the same paragraph, ``"\\n\\n"`` for a new paragraph.
+
+    A paragraph that holds a heading line plus a body line is the one shape a
+    small model reliably collapses — it renders the heading and silently drops
+    the body. Translating each line on its own removes that choice, and the
+    preceding-context block keeps the heading visible while the body is done.
+    """
+    units: list[tuple[str, str]] = []
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+    for paragraph in paragraphs:
+        lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
+        for line_index, line in enumerate(lines):
+            pieces = _split_oversized_paragraph(line, count_tokens, max_source_tokens)
+            for piece_index, piece in enumerate(pieces):
+                if not units:
+                    separator = ""
+                elif piece_index:
+                    separator = ""
+                elif line_index:
+                    separator = "\n"
+                else:
+                    separator = "\n\n"
+                units.append((piece, separator))
+    return units
 
 
 def plan_paragraph_chunks(

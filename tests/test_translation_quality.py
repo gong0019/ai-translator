@@ -100,7 +100,7 @@ class TranslationValidatorTests(unittest.TestCase):
         output = "据 authorities 称，五人受伤；13所房屋和3.5%的土地受到影响。"
         errors = validate_translation(source, output, "zh")
         self.assertIn("ARABIC_NUMBER_MISMATCH", errors)
-        self.assertIn("ENGLISH_NUMBER_MISMATCH", errors)
+        self.assertIn("SPELLED_NUMBER_MISMATCH", errors)
         self.assertIn("TARGET_SCRIPT_RESIDUAL", errors)
 
     def test_accepts_chinese_numbers_and_protected_spans(self):
@@ -204,7 +204,7 @@ class TranslationValidatorTests(unittest.TestCase):
     def test_tens_of_thousands_requires_equivalent_quantity(self):
         source = "Tens of thousands of people evacuated."
         self.assertIn(
-            "ENGLISH_NUMBER_MISMATCH",
+            "SPELLED_NUMBER_MISMATCH",
             validate_translation(source, "数千人撤离。", "zh"),
         )
         self.assertEqual(

@@ -9,6 +9,7 @@ from document_translation import (
     match_curated_terms,
     parse_glossary_response,
     plan_paragraph_chunks,
+    plan_translation_units,
 )
 
 
@@ -224,3 +225,32 @@ class DocumentTerminologyTests(unittest.TestCase):
 
     def test_formats_empty_glossary_as_empty_string(self):
         self.assertEqual(format_glossary({}), "")
+
+
+class TranslationUnitPlanTests(unittest.TestCase):
+    def count(self, text):
+        return len(text.split())
+
+    def test_each_source_line_becomes_its_own_unit(self):
+        source = "Headline goes here\nBody sentence follows.\n\nSecond paragraph."
+        self.assertEqual(
+            plan_translation_units(source, self.count, 100),
+            [
+                ("Headline goes here", ""),
+                ("Body sentence follows.", "\n"),
+                ("Second paragraph.", "\n\n"),
+            ],
+        )
+
+    def test_separators_reproduce_the_source_layout(self):
+        source = "A title\nA body line.\n\nNext paragraph.\nIts second line."
+        units = plan_translation_units(source, self.count, 100)
+        rebuilt = "".join(separator + text for text, separator in units)
+        self.assertEqual(rebuilt, source)
+
+    def test_an_oversized_line_is_split_without_adding_a_line_break(self):
+        source = "First sentence here. Second sentence here. Third sentence here."
+        units = plan_translation_units(source, self.count, 4)
+        self.assertGreater(len(units), 1)
+        # 同一行被拆开的片段不得引入换行，否则会伪造出新的行结构。
+        self.assertEqual([separator for _, separator in units[1:]], [""] * (len(units) - 1))

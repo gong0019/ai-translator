@@ -46,7 +46,7 @@ class QualityRetryTests(unittest.TestCase):
             "LINE_STRUCTURE_LOSS",
             "SENTENCE_COUNT_LOSS",
             "ARABIC_NUMBER_MISMATCH",
-            "ENGLISH_NUMBER_MISMATCH",
+            "SPELLED_NUMBER_MISMATCH",
             "OUTPUT_TRUNCATED",
         )
         for name, source, first, second, expected_instruction in cases:

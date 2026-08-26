@@ -60,7 +60,6 @@ class CLIQualityIntegrationTests(unittest.TestCase):
     def test_stream_translate_never_prints_rejected_first_attempt(self):
         cli = self.make_cli(
             (
-                ('{"Six":"六"}', "stop"),
                 ("Six people受伤。", "stop"),
                 ("六人受伤。", "stop"),
             )
@@ -71,8 +70,8 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertNotIn("Six people受伤。", rendered)
         self.assertIn("六人受伤。", rendered)
-        self.assertEqual(len(cli.llm.calls), 3)
-        self.assertEqual(cli.llm.calls[2]["temperature"], 0.0)
+        self.assertEqual(len(cli.llm.calls), 2)
+        self.assertEqual(cli.llm.calls[1]["temperature"], 0.0)
 
     def test_stream_translate_translates_headline_and_body_as_separate_units(self):
         cli = self.make_cli(
@@ -81,8 +80,8 @@ class CLIQualityIntegrationTests(unittest.TestCase):
                     '{"Nevada":"内华达州","Reno":"里诺"}',
                     "stop",
                 ),
+                ("“惊恐万分”：野火蔓延，数千人撤离内华达州家园", "stop"),
                 (
-                    "“惊恐万分”：野火蔓延，数千人撤离内华达州家园\n"
                     "美国内华达州数以万计的居民被要求撤离家园，"
                     "因为一场野火逼近里诺市。",
                     "stop",
@@ -101,14 +100,26 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertIn("“惊恐万分”：野火蔓延，数千人撤离内华达州家园", rendered)
         self.assertIn("数以万计", rendered)
         self.assertNotIn("质量校验未完全通过", rendered)
-        self.assertEqual(len(cli.llm.calls), 2)
+        # 标题行与正文行各自成为一个翻译单元，模型无法只翻标题就交差。
+        self.assertEqual(len(cli.llm.calls), 3)
+        self.assertEqual(
+            cli.llm.calls[1]["messages"][1]["content"],
+            "'Scared to death': Thousands evacuate Nevada homes as wildfire spreads",
+        )
+        self.assertTrue(
+            cli.llm.calls[2]["messages"][1]["content"].startswith("Tens of thousands")
+        )
+        # 同一段落内的两行仍以换行而非空行相连。
+        self.assertIn(
+            "内华达州家园\n美国内华达州数以万计",
+            rendered,
+        )
 
     def test_stream_translate_displays_second_attempt_without_internal_errors(self):
         cli = self.make_cli(
             (
-                ('{"Six":"六"}', "stop"),
                 ("首次错误译文：Six people受伤。", "stop"),
-                ("最终译文：authorities称Six people受伤。", "stop"),
+                ("最终译文：六人受伤，people在场。", "stop"),
             )
         )
         output = io.StringIO()
@@ -116,14 +127,14 @@ class CLIQualityIntegrationTests(unittest.TestCase):
             cli.stream_translate("Six people were injured.")
         rendered = output.getvalue()
         self.assertNotIn("首次错误译文", rendered)
-        self.assertIn("最终译文：authorities称Six people受伤。", rendered)
+        self.assertIn("最终译文：六人受伤，people在场。", rendered)
         self.assertNotIn("翻译单元未通过质量校验", rendered)
         self.assertNotIn("TARGET_SCRIPT_RESIDUAL", rendered)
-        self.assertNotIn("ENGLISH_NUMBER_MISMATCH", rendered)
+        self.assertNotIn("SPELLED_NUMBER_MISMATCH", rendered)
         self.assertNotIn("可能仍有未翻译内容", rendered)
         self.assertNotIn("可能存在结构或内容缺失", rendered)
         self.assertNotIn("可能存在数字不一致", rendered)
-        self.assertEqual(len(cli.llm.calls), 3)
+        self.assertEqual(len(cli.llm.calls), 2)
 
     def test_multi_paragraph_document_uses_one_glossary_and_per_paragraph_requests(self):
         cli = self.make_cli(
@@ -185,7 +196,6 @@ class CLIQualityIntegrationTests(unittest.TestCase):
     def test_only_defective_document_chunk_is_retried(self):
         cli = self.make_cli(
             (
-                ('{"First":"第一"}', "stop"),
                 ("第一段。", "stop"),
                 ("Reuters报道。", "stop"),
                 ("路透社报道。", "stop"),
@@ -205,34 +215,44 @@ class CLIQualityIntegrationTests(unittest.TestCase):
         self.assertNotIn("Reuters报道。", rendered)
         translated_sources = [
             call["messages"][1]["content"]
-            for call in cli.llm.calls[1:]
+            for call in cli.llm.calls
         ]
         self.assertEqual(translated_sources.count("First paragraph."), 1)
-        self.assertEqual(len(cli.llm.calls), 4)
+        self.assertEqual(len(cli.llm.calls), 3)
 
-    def test_next_paragraph_uses_glossary_without_repeating_previous_translation(self):
+    def test_next_paragraph_carries_one_labelled_sentence_of_context(self):
         cli = self.make_cli(
             (
-                ('{"First":"第一","Second":"第二"}', "stop"),
-                ("第一段。", "stop"),
-                ("第二段。", "stop"),
+                ("路透社发布了报告。该报告长达百页。", "stop"),
+                ("该机构补充了更多细节。", "stop"),
             )
         )
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            cli.stream_translate("First paragraph.\n\nSecond paragraph.")
+            cli.stream_translate(
+                "Reuters published the report. It ran to a hundred pages."
+                "\n\nThe agency added more detail."
+            )
 
-        self.assertIn("第一段。", output.getvalue())
-        self.assertIn("第二段。", output.getvalue())
-        second_translation_prompt = cli.llm.calls[2]["messages"][0]["content"]
-        self.assertIn("- First => 第一", second_translation_prompt)
-        self.assertNotIn("PREVIOUS CONFIRMED TRANSLATION", second_translation_prompt)
-        self.assertNotIn("第一段。", second_translation_prompt)
+        self.assertIn("路透社发布了报告。该报告长达百页。", output.getvalue())
+        self.assertIn("该机构补充了更多细节。", output.getvalue())
+
+        first_prompt = cli.llm.calls[0]["messages"][0]["content"]
+        second_prompt = cli.llm.calls[1]["messages"][0]["content"]
+        # 第一段没有前文可带。
+        self.assertNotIn("PRECEDING CONTEXT", first_prompt)
+        # 术语表仍然跨段共享。
+        self.assertIn("- Reuters => 路透社", second_prompt)
+        # 只带最后一句，且明确标注为已翻译、不得重译。
+        self.assertIn("PRECEDING CONTEXT", second_prompt)
+        self.assertIn("Do not translate or repeat it.", second_prompt)
+        self.assertIn("- translation: 该报告长达百页。", second_prompt)
+        self.assertNotIn("路透社发布了报告。", second_prompt)
+        self.assertNotIn("Reuters published the report.", second_prompt)
 
     def test_multi_paragraph_translation_shows_progress_while_next_chunk_runs(self):
         cli = self.make_cli(
             (
-                ('{"First":"第一","Second":"第二"}', "stop"),
                 ("第一段。", "stop"),
                 ("第二段。", "stop"),
             )
@@ -247,15 +267,15 @@ class CLIQualityIntegrationTests(unittest.TestCase):
 
     def test_specialist_glossaries_match_lowercase_terms_and_skip_ambiguous_blockchain_words(self):
         cli = self.make_cli(())
-        finance = cli._build_document_glossary(
+        finance, _ = cli._build_document_glossary(
             "Inflation rose after quantitative easing.",
             "en_to_zh",
         )
-        ordinary_wallet = cli._build_document_glossary(
+        ordinary_wallet, _ = cli._build_document_glossary(
             "The stolen wallet was returned to its owner.",
             "en_to_zh",
         )
-        crypto_wallet = cli._build_document_glossary(
+        crypto_wallet, _ = cli._build_document_glossary(
             "The Bitcoin wallet uses a smart contract.",
             "en_to_zh",
         )
@@ -268,15 +288,15 @@ class CLIQualityIntegrationTests(unittest.TestCase):
 
     def test_hardware_and_material_glossaries_require_domain_context(self):
         cli = self.make_cli(())
-        ordinary_water = cli._build_document_glossary(
+        ordinary_water, _ = cli._build_document_glossary(
             "The city upgraded its water system after the storm.",
             "en_to_zh",
         )
-        hardware = cli._build_document_glossary(
+        hardware, _ = cli._build_document_glossary(
             "The GPU uses water cooling on a printed circuit board.",
             "en_to_zh",
         )
-        materials = cli._build_document_glossary(
+        materials, _ = cli._build_document_glossary(
             "The packaging supplier selected polypropylene and polyethylene film.",
             "en_to_zh",
         )
@@ -290,15 +310,15 @@ class CLIQualityIntegrationTests(unittest.TestCase):
 
     def test_cross_border_and_trade_glossaries_require_domain_context(self):
         cli = self.make_cli(())
-        ordinary_order = cli._build_document_glossary(
+        ordinary_order, _ = cli._build_document_glossary(
             "The court issued an order after the hearing.",
             "en_to_zh",
         )
-        commerce = cli._build_document_glossary(
+        commerce, _ = cli._build_document_glossary(
             "The Amazon seller completed order fulfillment and issued a refund.",
             "en_to_zh",
         )
-        trade = cli._build_document_glossary(
+        trade, _ = cli._build_document_glossary(
             "The bill of lading lists FOB terms and a customs declaration.",
             "en_to_zh",
         )
