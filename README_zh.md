@@ -18,7 +18,7 @@
 - ⚡ **本地运行 · 隐私安全**：基于底层 C++ 优化推理（`llama.cpp`），100% 运行于本地 CPU/核显/显卡。零 API 费用、零数据上云。
 - 🧩 **通用 GGUF 引擎与模型动态自动发现**：只需将任意 `.gguf` 格式的大模型（Qwen2.5、DeepSeek-R1、Llama-3.2、Gemma、Mistral）放入 `models/` 目录，程序自动识别并支持一键热切换。
 - 🧠 **文档级新闻翻译**：使用精简语种 Skill、全文共享术语表、按段落安全分块、截断确认，并只对有缺陷的分块定向重译。
-- 📷 **截图智能 OCR 即译 (`Ctrl+V`)**：按下 `Ctrl+V` 自动捕获剪贴板截图，调用本地 Tesseract 提取文字并保留空间排版，逐行对照翻译。
+- 📷 **截图智能 OCR 即译 (`Ctrl+V`)**：按下 `Ctrl+V` 自动捕获剪贴板截图，先用 Tesseract 检测页面文种，再只加载对应语言包提取文字并保留空间排版，逐行对照翻译。
 - 💤 **1 分钟闲置自动休眠（0 MB 内存占用）**：翻译完成后 60 秒无操作，自动释放模型权重（平时 0 MB 负载）；新任务时 0.3 秒瞬间从固态硬盘唤醒，长文翻译期间具备任务执行锁保护。
 - 📋 **剪贴板智能输入**：`Ctrl+V` 可正常粘贴文字，也可识别剪贴板图片并执行本地 OCR；译文不会自动写回剪贴板。
 - 🧼 **纯净输出**：上下水平分割线渲染，彻底移除左右竖线 `│` 字符，鼠标划词复制 100% 纯文本无污染。
@@ -125,11 +125,11 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | 
 
 所有的提示词与语种专项规则均已模块化解耦在 `skills/` 目录下：
 
-- `skills/base.md`：通用底座规则（排版结构保留、代码/URL 免翻保护、语义完整性校验）。
-- `skills/ja_to_zh.md`：日译中专属 Skill（从句句尾否定防漏、防对比句截半、禁止语义压缩）。
-- `skills/en_to_zh.md`：英译中专属 Skill（从句语法重构、时间与条件前置化、消除欧化倒装）。
-- `skills/zh_to_en.md`：中译英专属 Skill（主语智能补齐、成语隐喻意译）。
-- `skills/news_terms.json`：新闻常用固定术语，与当前文档动态规划的术语表共同使用。
+- `skills/base.md`：通用底座契约，承载全部语种共用的覆盖度、结构、术语与输出规则；各语种对文件只保留自己的语法差异，避免 23 份重复样板。
+- `skills/ja_to_zh.md`：日译中专属语法（句尾否定防漏、防对比句截半、省略主语回指）。
+- `skills/en_to_zh.md`：英译中专属语法（定语拆分防止「的」字堆叠、状语前置、无施事被动转主动、名词化还原为动词、代词删减、长句切分、量级与日期格式换算）。
+- `skills/zh_to_en.md`：中译英专属语法（主语补齐、流水句断句、话题-述题重组、了/着/过 到时体的映射、范畴词与虚义动词删除、成语意译、万/亿 算术换算、冠词与单复数决策、量词构式化）。
+- `skills/news_terms.json`：新闻专有名词库，已改为九语种双向格式（en/zh/ja/ko/de/fr/es/ru/it），任意语种对都能取用。只收录有唯一标准译名的专有名词——人工词库是强制校验的，收录多义普通名词会造成假阳性重译。
 - `skills/finance_terms.json`、`stocks_terms.json`、`tech_terms.json`、`blockchain_terms.json`：金融经济、股票、计算机、区块链多语种术语库。程序只注入正文中命中的词条；`wallet`、`mining` 等歧义区块链词还要求命中区块链上下文。
 - `skills/crossborder_ecommerce_terms.json`、`trade_terms.json`：跨境电商运营与国际贸易术语库，涵盖履约、提单、Incoterms®、报关单和 HS 编码等。
 - `skills/hardware_terms.json`、`materials_terms.json`：硬件制造及材料包装术语库，涵盖风冷、水冷、PCB/PCBA、PP、PE、PET、PVC、ABS、PC、PA 等；仅在命中领域上下文时注入，避免日常词义被强制替换。
@@ -149,11 +149,16 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | 
 ```json
 {
   "quality_validation": true,
-  "quality_retry_limit": 1
+  "quality_retry_limit": 1,
+  "repeat_penalty_latin": 1.02
 }
 ```
 
 `quality_validation` 只接受 `true` 或 `false`；`quality_retry_limit` 只接受 `0` 或 `1`。其他值固定回退为 `true` 和 `1`。自动复制到剪贴板仍保持关闭。
+
+`repeat_penalty_latin` 只在目标语言为英、德、法、西、意、俄时生效。这些语言靠 the/of/a 这类功能词的高频重复成句，主 `repeat_penalty`（1.08）会推动模型省略冠词和介词；中日韩译文不受影响，仍用 1.08。已配置的更低值不会被抬高。
+
+配置文件只接受程序已知的键，历史遗留键会在下次保存时自动清除。
 
 ---
 

@@ -18,7 +18,7 @@
 - ⚡ **Local & Privacy-First**: 100% runs on your local CPU or GPU using optimized C++ inference (`llama.cpp`). Zero cloud API fees, zero data tracking.
 - 🧩 **Universal GGUF Engine**: Auto-discovers and hot-switches between **any GGUF model** (Qwen2.5, DeepSeek, Llama-3, Gemma-2, Mistral) simply by dropping them into `models/`.
 - 🧠 **Document-Aware News Translation**: Uses compact language skills, a shared document glossary, paragraph-safe chunking, truncation confirmation, and targeted retry of only the defective chunk.
-- 📷 **Smart Screenshot OCR (`Ctrl+V`)**: Press `Ctrl+V` to automatically capture clipboard images, extract text via local Tesseract OCR while preserving spatial layouts, and translate line-by-line.
+- 📷 **Smart Screenshot OCR (`Ctrl+V`)**: Press `Ctrl+V` to automatically capture clipboard images, detect the page script with Tesseract and load only the matching language packs, extract text while preserving spatial layouts, and translate line-by-line.
 - 💤 **1-Minute Auto-Sleep (0 MB Footprint)**: Automatically unloads model weights after 60 seconds of inactivity to keep your system memory clean (0 MB RAM). Instantly wakes up in ~0.3s on new input, with active-lock protection during long text translations.
 - 📋 **Clipboard-Friendly Input**: `Ctrl+V` pastes text normally or detects clipboard images for local OCR. Translation output is not copied automatically.
 - 🧼 **Clean Output**: Borderless horizontal rule dividers—no side pipe `│` characters. Copy text cleanly without formatting artifacts.
@@ -125,11 +125,11 @@ This tool supports **any GGUF quantized model** (Qwen, DeepSeek-R1, Llama-3, Gem
 
 Prompts and linguistic rules are modularized as standalone files under `skills/`:
 
-- `skills/base.md`: Universal base prompt (format preservation, URL protection, translatables).
-- `skills/ja_to_zh.md`: Japanese-to-Chinese skill (negation preservation, anti-semantic compression, SOV restructuring).
-- `skills/en_to_zh.md`: English-to-Chinese skill (clause restructuring, temporal/conditional pre-positioning).
-- `skills/zh_to_en.md`: Chinese-to-English skill (subject recovery, idiom meaning adaptation).
-- `skills/news_terms.json`: Curated news terminology used together with document-specific term planning.
+- `skills/base.md`: The shared contract carrying coverage, structure, terminology, and output rules for every language pair. Pair files keep only their own grammar, instead of 23 copies of the same boilerplate.
+- `skills/ja_to_zh.md`: Japanese-to-Chinese grammar (sentence-final negation, both sides of a contrast, omitted-subject recovery).
+- `skills/en_to_zh.md`: English-to-Chinese grammar (modifier splitting to avoid stacked 的, adverbial fronting, agentless passive to active, denominalization, pronoun dropping, long-sentence splitting, magnitude and date conversion).
+- `skills/zh_to_en.md`: Chinese-to-English grammar (subject recovery, run-on splitting, topic-comment recasting, 了/着/过 to tense-aspect, category-noun deletion, idiom rendering, 万/亿 arithmetic conversion, article and number choice, measure-word constructions).
+- `skills/news_terms.json`: Curated news proper nouns in a nine-language bidirectional format (en/zh/ja/ko/de/fr/es/ru/it), usable by any pair. It holds only names with a single standard rendering: curated entries are enforced, so an ambiguous common noun would trigger false repairs.
 - `skills/finance_terms.json`, `stocks_terms.json`, `tech_terms.json`, `blockchain_terms.json`: Finance, equity, computing, and blockchain terminology. The runtime selects only terms that occur in the document; ambiguous blockchain words require a blockchain context marker.
 - `skills/crossborder_ecommerce_terms.json`, `trade_terms.json`: Marketplace-operations and international-trade terminology, including fulfilment, bills of lading, Incoterms®, customs declarations, and HS codes.
 - `skills/hardware_terms.json`, `materials_terms.json`: Hardware/manufacturing and polymer/packaging terminology, including air/water cooling, PCB/PCBA, PP, PE, PET, PVC, ABS, PC, and PA. Context markers prevent generic uses from forcing a specialist translation.
@@ -149,11 +149,16 @@ Configure the behavior in `config.json` or `~/.config/ai-translator/config.json`
 ```json
 {
   "quality_validation": true,
-  "quality_retry_limit": 1
+  "quality_retry_limit": 1,
+  "repeat_penalty_latin": 1.02
 }
 ```
 
 `quality_validation` accepts only `true` or `false`. `quality_retry_limit` accepts only `0` or `1`. Invalid values resolve to `true` and `1`. Automatic clipboard copying remains disabled.
+
+`repeat_penalty_latin` applies only when the target is English, German, French, Spanish, Italian, or Russian. Those languages build sentences by repeating function words such as `the`, `of`, and `a`, and the main `repeat_penalty` of 1.08 pushes the model to drop articles and prepositions. Chinese, Japanese, and Korean targets keep 1.08. A lower configured value is never raised.
+
+The config file accepts only keys the program knows; stale keys are dropped on the next save.
 
 ---
 
