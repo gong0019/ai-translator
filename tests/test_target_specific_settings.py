@@ -93,5 +93,55 @@ class GenerationBudgetTests(unittest.TestCase):
         self.assertTrue(translator_cli.allows_repair(DEFAULT_CONFIG, 1600))
         self.assertFalse(translator_cli.allows_repair(DEFAULT_CONFIG, 1601))
 
+
+class ConfigPersistenceTests(unittest.TestCase):
+    def saved(self, config):
+        cli = object.__new__(translator_cli.TranslatorCLI)
+        cli.config = dict(DEFAULT_CONFIG)
+        cli.config.update(config)
+        cli.models_map = {"1": {"filename": "model.gguf"}}
+        cli.active_model_idx = "1"
+        written = {}
+
+        def fake_open(path, *args, **kwargs):
+            import io as _io
+
+            class Sink(_io.StringIO):
+                def __exit__(inner, *exc):
+                    written[path] = inner.getvalue()
+                    return False
+
+                def __enter__(inner):
+                    return inner
+
+                def fileno(inner):
+                    return 0
+
+            return Sink()
+
+        with patch("translator_cli.open", fake_open, create=True):
+            with patch("translator_cli.os.fsync"):
+                with patch("translator_cli.os.makedirs"):
+                    cli.save_config()
+        import json as _json
+
+        return _json.loads(next(iter(written.values())))
+
+    def test_a_tuning_key_left_at_its_default_is_not_persisted(self):
+        # 把默认值写进文件，会让旧值永久盖住代码里的新默认值。
+        payload = self.saved({})
+        self.assertNotIn("retry_max_source_tokens", payload)
+        self.assertNotIn("n_ctx", payload)
+
+    def test_session_choices_are_always_persisted(self):
+        payload = self.saved({"target_lang_key": "3"})
+        self.assertEqual(payload["target_lang_key"], "3")
+        self.assertEqual(payload["selected_model_filename"], "model.gguf")
+
+    def test_a_hand_edited_tuning_key_survives(self):
+        payload = self.saved({"retry_max_source_tokens": 400, "n_ctx": 4096})
+        self.assertEqual(payload["retry_max_source_tokens"], 400)
+        self.assertEqual(payload["n_ctx"], 4096)
+
 if __name__ == "__main__":
     unittest.main()

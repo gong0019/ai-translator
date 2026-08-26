@@ -476,11 +476,27 @@ class TranslatorCLI:
             current_fn = self.models_map[self.active_model_idx]["filename"]
         self.config["selected_model_filename"] = current_fn
 
+        # 只落盘会话选择项和被手工改过的键。把处于默认值的调优参数一起写下去，
+        # 会让文件里的旧值永久盖住代码里的新默认值——改了默认也到不了已装环境。
+        payload = {
+            key: self.config.get(key, DEFAULT_CONFIG[key])
+            for key in ("target_lang_key", "selected_model_filename")
+        }
+        payload.update(
+            {
+                key: value
+                for key, value in self.config.items()
+                if key in DEFAULT_CONFIG
+                and key not in payload
+                and value != DEFAULT_CONFIG[key]
+            }
+        )
+
         # 写入用户主目录
         try:
             os.makedirs(USER_CONFIG_DIR, exist_ok=True)
             with open(USER_CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.config, f, indent=2, ensure_ascii=False)
+                json.dump(payload, f, indent=2, ensure_ascii=False)
                 f.flush()
                 os.fsync(f.fileno())
         except Exception:
@@ -489,7 +505,7 @@ class TranslatorCLI:
         # 写入本地便携配置
         try:
             with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.config, f, indent=2, ensure_ascii=False)
+                json.dump(payload, f, indent=2, ensure_ascii=False)
                 f.flush()
                 os.fsync(f.fileno())
         except Exception:
