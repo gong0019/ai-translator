@@ -133,7 +133,7 @@ DEFAULT_CONFIG = {
     "repeat_penalty": 1.08,
     "repeat_penalty_latin": 1.02,
     "max_tokens": 4096,
-    "retry_max_source_tokens": 800,
+    "retry_max_source_tokens": 1600,
     "quality_validation": True,
     "quality_retry_limit": 1,
 }
@@ -162,8 +162,15 @@ def resolve_max_tokens(config: dict, source_tokens: int) -> int:
 
 
 def allows_repair(config: dict, source_tokens: int) -> bool:
-    """A repair costs a second full generation, so bound it by unit size."""
-    limit = int(config.get("retry_max_source_tokens", 800))
+    """A repair costs a second full generation, so bound it by unit size.
+
+    The bound started at 800 because repairs were worthless on a
+    translation-only model, which rendered the repair instructions instead of
+    obeying them. An instruction-following model does repair correctly, and a
+    single-unit document runs past 1400 tokens, so the ceiling has to clear
+    that or the one pass that can catch a corrupted figure never runs.
+    """
+    limit = int(config.get("retry_max_source_tokens", 1600))
     return source_tokens <= limit
 
 def get_optimal_threads():

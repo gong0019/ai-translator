@@ -87,8 +87,11 @@ class GenerationBudgetTests(unittest.TestCase):
 
     def test_a_repair_is_only_attempted_for_a_bounded_unit(self):
         self.assertTrue(translator_cli.allows_repair(DEFAULT_CONFIG, 250))
-        self.assertTrue(translator_cli.allows_repair(DEFAULT_CONFIG, 800))
-        self.assertFalse(translator_cli.allows_repair(DEFAULT_CONFIG, 801))
+        # 单单元文档常在 1400 token 上下，必须落在可重译范围内，
+        # 否则唯一能抓住数字被篡改的那一遍永远不会跑。
+        self.assertTrue(translator_cli.allows_repair(DEFAULT_CONFIG, 1424))
+        self.assertTrue(translator_cli.allows_repair(DEFAULT_CONFIG, 1600))
+        self.assertFalse(translator_cli.allows_repair(DEFAULT_CONFIG, 1601))
 
 if __name__ == "__main__":
     unittest.main()
