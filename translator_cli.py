@@ -136,7 +136,35 @@ DEFAULT_CONFIG = {
     "retry_max_source_tokens": 1600,
     "quality_validation": True,
     "quality_retry_limit": 1,
+    "adaptive_quality_mode": True,
+    "adaptive_quality_min_chunks": 5,
 }
+
+# 值得再生成一遍的缺陷。残留和术语缺失被排除在外：柳叶刀实测里它们的报告
+# 几乎全是正确译文——品牌名、缩略语、统计记号、单位。为这两类重跑一整段
+# 是纯亏，而数字被改、段落丢失这些必须修。
+FAST_DOCUMENT_RETRY_ERRORS = frozenset(
+    {
+        "EMPTY_OUTPUT",
+        "PARAGRAPH_COUNT_MISMATCH",
+        "LINE_STRUCTURE_LOSS",
+        "SENTENCE_COUNT_LOSS",
+        "ARABIC_NUMBER_MISMATCH",
+        "SPELLED_NUMBER_MISMATCH",
+        "OUTPUT_TRUNCATED",
+        "CROSS_CHUNK_REPETITION",
+    }
+)
+
+
+def retryable_errors_for_document(config: dict, chunk_count: int):
+    """Use strict retries for short text and critical-only retries for long documents."""
+    enabled = config.get("adaptive_quality_mode")
+    enabled = enabled if type(enabled) is bool else DEFAULT_CONFIG["adaptive_quality_mode"]
+    minimum = config.get("adaptive_quality_min_chunks")
+    if type(minimum) is not int or minimum < 1:
+        minimum = DEFAULT_CONFIG["adaptive_quality_min_chunks"]
+    return FAST_DOCUMENT_RETRY_ERRORS if enabled and chunk_count >= minimum else None
 
 # 拉丁与西里尔字母译文靠 the/of/a/в/на 这类功能词的高频重复成句，
 # 1.08 的重复惩罚会推动模型省略冠词和介词，因此这些目标语言单列。
@@ -957,6 +985,9 @@ class TranslatorCLI:
                 glossary, advisory_terms = self._plan_unknown_terms(
                     normalized_text, pair_key, matched, unknown, glossary
                 )
+            # 两层过滤互补：类型决定这个缺陷值不值得修，
+            # 单元大小决定这一段修不修得起。
+            retryable_errors = retryable_errors_for_document(self.config, len(units))
             previous_translation = ""
             previous_source = ""
             console.print()
@@ -1010,6 +1041,7 @@ class TranslatorCLI:
                         glossary=unit_glossary,
                         previous_output=previous_translation,
                         advisory_terms=advisory_terms,
+                        retryable_errors=retryable_errors,
                     )
                 else:
                     with console.status(

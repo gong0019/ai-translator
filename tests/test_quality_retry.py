@@ -6,6 +6,7 @@ from translation_quality import (
     normalize_quality_settings,
     run_quality_checked_completion,
 )
+import translator_cli
 
 
 class QualityRetryTests(unittest.TestCase):
@@ -341,6 +342,67 @@ class QualityRetryTests(unittest.TestCase):
             with self.subTest(inputs=inputs):
                 self.assertEqual(normalize_quality_settings(*inputs), expected)
 
+
+
+class AdaptiveRetryPolicyTests(unittest.TestCase):
+    """吸收自 cbbd989，错误码已随重命名同步。"""
+
+    def test_fast_document_filter_does_not_retry_noncritical_residual_text(self):
+        calls = []
+        result = run_quality_checked_completion(
+            "The Lancet published the article.",
+            "zh",
+            "SYSTEM",
+            lambda messages, temperature: (
+                calls.append(temperature),
+                CompletionResult("《柳叶刀》发表了The Lancet文章。"),
+            )[1],
+            0.1,
+            1,
+            retryable_errors={"ARABIC_NUMBER_MISMATCH"},
+        )
+        self.assertEqual(result.text, "《柳叶刀》发表了The Lancet文章。")
+        self.assertFalse(result.retried)
+        self.assertIn("TARGET_SCRIPT_RESIDUAL", result.errors)
+        self.assertEqual(calls, [0.1])
+
+    def test_fast_document_filter_still_retries_changed_numbers(self):
+        outputs = iter((CompletionResult("二十人参加。"), CompletionResult("十八人参加。")))
+        calls = []
+        result = run_quality_checked_completion(
+            "18 people attended.",
+            "zh",
+            "SYSTEM",
+            lambda messages, temperature: (calls.append(temperature), next(outputs))[1],
+            0.1,
+            1,
+            retryable_errors={"ARABIC_NUMBER_MISMATCH", "SPELLED_NUMBER_MISMATCH"},
+        )
+        self.assertEqual(result.text, "十八人参加。")
+        self.assertTrue(result.retried)
+        self.assertEqual(calls, [0.1, 0.0])
+
+    def test_adaptive_policy_only_uses_fast_mode_for_long_documents(self):
+        config = {"adaptive_quality_mode": True, "adaptive_quality_min_chunks": 5}
+        self.assertIsNone(translator_cli.retryable_errors_for_document(config, 4))
+        self.assertEqual(
+            translator_cli.retryable_errors_for_document(config, 5),
+            translator_cli.FAST_DOCUMENT_RETRY_ERRORS,
+        )
+        self.assertIsNone(
+            translator_cli.retryable_errors_for_document(
+                {"adaptive_quality_mode": False}, 99
+            )
+        )
+
+    def test_the_renamed_number_code_is_still_retryable(self):
+        # 改名后若忘记同步，这条过滤规则会静默失效：数字被改不再触发重译。
+        self.assertIn(
+            "SPELLED_NUMBER_MISMATCH", translator_cli.FAST_DOCUMENT_RETRY_ERRORS
+        )
+        self.assertNotIn(
+            "ENGLISH_NUMBER_MISMATCH", translator_cli.FAST_DOCUMENT_RETRY_ERRORS
+        )
 
 if __name__ == "__main__":
     unittest.main()

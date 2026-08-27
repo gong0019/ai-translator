@@ -13,6 +13,22 @@ The files in `skills/*_terms.json` are a small, curated translation layer, not a
 
 The catalog intentionally stores translations rather than source definitions. Additions should use the canonical record shape shown below and should be checked against an authoritative domain source before inclusion.
 
+## Maintaining catalogs
+
+The maintenance scripts always target the `skills/` directory beside their own checkout; they do not contain machine-specific paths. They merge additions by case-insensitive English source term, keeping the existing record when a source key already exists. This makes them safe to run repeatedly without replacing curated entries.
+
+```bash
+# Validate every specialist catalog: required languages and unique source terms.
+python3 scripts/build_comprehensive_terms.py
+
+# Merge the respective curated additions without overwriting existing entries.
+python3 scripts/build_all_terms.py
+python3 scripts/build_full_database.py
+python3 scripts/populate_all_dictionaries.py
+```
+
+Review the resulting JSON diff before committing. The scripts provide catalog maintenance only; the runtime still injects a terminology entry only when it is present in the text and, for context-gated domains, when a domain marker is also present.
+
 ```json
 {
   "en": "quantitative easing",

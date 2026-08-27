@@ -134,6 +134,8 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | 
 - `skills/crossborder_ecommerce_terms.json`、`trade_terms.json`：跨境电商运营与国际贸易术语库，涵盖履约、提单、Incoterms®、报关单和 HS 编码等。
 - `skills/hardware_terms.json`、`materials_terms.json`：硬件制造及材料包装术语库，涵盖风冷、水冷、PCB/PCBA、PP、PE、PET、PVC、ABS、PC、PA 等；仅在命中领域上下文时注入，避免日常词义被强制替换。
 
+编辑词库后可执行 `python3 scripts/build_comprehensive_terms.py` 校验必填语种和重复源词。词库维护脚本会合并新增记录并保留已有源词；执行前请先阅读术语来源文档。
+
 所有词库的来源与维护原则见 [`docs/terminology-sources.md`](docs/terminology-sources.md)。
 
 你可以使用任何文本编辑器随时修改 `skills/` 下的 `.md` 文件，**下次翻译时实时热加载生效，无需重启程序**。
@@ -150,13 +152,17 @@ Shortcuts: Ctrl+V (智能粘图/文本) | /lang (语言) | /model (换模型) | 
 {
   "quality_validation": true,
   "quality_retry_limit": 1,
-  "repeat_penalty_latin": 1.02
+  "repeat_penalty_latin": 1.02,
+  "adaptive_quality_mode": true,
+  "adaptive_quality_min_chunks": 5
 }
 ```
 
 `quality_validation` 只接受 `true` 或 `false`；`quality_retry_limit` 只接受 `0` 或 `1`。其他值固定回退为 `true` 和 `1`。自动复制到剪贴板仍保持关闭。
 
 `retry_max_source_tokens` 限定只有不超过该长度的翻译单元才允许定向重译。重译是一次完整生成，对超长单元代价过高，而数字校验在密集数字文本上本就不够精确。默认 800。
+
+启用 `adaptive_quality_mode` 后，达到 `adaptive_quality_min_chunks` 的长文只会因空译文、截断、结构缺失、数字变化或重复分段这些客观问题重译；短文本保持严格模式。残留与术语缺失被排除，因为实测中它们的报告几乎都是正确译文（品牌名、缩略语、统计记号、单位）。
 
 生成上限按源文长度推导（约源 token 的 1.8 倍），不再一律使用 `max_tokens`。术语规划只在文档被切成两个以上单元时才执行——它的唯一作用是让同一名字跨独立调用保持一致。
 

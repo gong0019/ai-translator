@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 import re
-from typing import Callable, Iterable
+from collections.abc import Collection, Iterable
+from typing import Callable
 
 from document_translation import format_glossary
 
@@ -903,12 +904,18 @@ def run_quality_checked_completion(
     glossary: dict[str, str] | None = None,
     previous_output: str = "",
     advisory_terms: Iterable[str] = (),
+    retryable_errors: Collection[str] | None = None,
 ) -> QualityOutcome:
     """Generate, validate, and keep one repair only when it strictly improves.
 
     ``advisory_terms`` name glossary entries the model proposed rather than ones
     curated by hand. A miss on those is reported to the reader but never forces a
     repair, because an isolated dictionary gloss is often wrong in context.
+
+    ``retryable_errors`` restricts which defects are worth a second generation.
+    Residue and glossary misses are the two that most often turn out to be
+    correct on inspection, so a long document can decline to redo a chunk for
+    them while still redoing one whose figures changed.
     """
     chunk_glossary = glossary or {}
     advisory = frozenset(advisory_terms)
@@ -947,7 +954,12 @@ def run_quality_checked_completion(
 
     if not first_errors:
         return QualityOutcome(first_result.text, (), False)
-    if retry_limit != 1:
+    worth_retrying = (
+        first_errors
+        if retryable_errors is None
+        else tuple(error for error in first_errors if error in retryable_errors)
+    )
+    if retry_limit != 1 or not worth_retrying:
         return outcome(first_result.text, first_errors, False)
 
     second_result = complete(
@@ -960,7 +972,7 @@ def run_quality_checked_completion(
                 first_result.text,
                 target_code,
                 enforced_glossary,
-                first_errors,
+                worth_retrying,
             ),
             chunk_glossary,
         ),

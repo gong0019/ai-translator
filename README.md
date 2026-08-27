@@ -134,7 +134,9 @@ Prompts and linguistic rules are modularized as standalone files under `skills/`
 - `skills/crossborder_ecommerce_terms.json`, `trade_terms.json`: Marketplace-operations and international-trade terminology, including fulfilment, bills of lading, Incoterms®, customs declarations, and HS codes.
 - `skills/hardware_terms.json`, `materials_terms.json`: Hardware/manufacturing and polymer/packaging terminology, including air/water cooling, PCB/PCBA, PP, PE, PET, PVC, ABS, PC, and PA. Context markers prevent generic uses from forcing a specialist translation.
 
-The source and maintenance policy for these catalogs is documented in [`docs/terminology-sources.md`](docs/terminology-sources.md).
+The source and maintenance policy for these catalogs is documented in [`After editing a catalogue, run `python3 scripts/build_comprehensive_terms.py` to check required languages and duplicate source terms. The maintenance scripts merge new records and keep existing source terms; read the terminology sources document before running them.
+
+docs/terminology-sources.md`](docs/terminology-sources.md).
 
 You can edit any `.md` file in `skills/` directly with your preferred editor. Changes take effect on the very next translation without restarting the program.
 
@@ -150,13 +152,17 @@ Configure the behavior in `config.json` or `~/.config/ai-translator/config.json`
 {
   "quality_validation": true,
   "quality_retry_limit": 1,
-  "repeat_penalty_latin": 1.02
+  "repeat_penalty_latin": 1.02,
+  "adaptive_quality_mode": true,
+  "adaptive_quality_min_chunks": 5
 }
 ```
 
 `quality_validation` accepts only `true` or `false`. `quality_retry_limit` accepts only `0` or `1`. Invalid values resolve to `true` and `1`. Automatic clipboard copying remains disabled.
 
 `retry_max_source_tokens` limits repairs to units no larger than this, since a repair is a second full generation and the number check is least reliable on number-dense text. Default 800.
+
+With `adaptive_quality_mode` on, a document of at least `adaptive_quality_min_chunks` units is redone only for objective defects — empty output, truncation, lost structure, changed numbers, or a repeated chunk. Short text keeps strict retries. Residue and glossary misses are excluded because in testing they almost always flagged correct text: brand names, acronyms, statistical notation, units.
 
 Generation is bounded by the source it translates (about 1.8x the source tokens) rather than always using `max_tokens`. Terminology planning runs only when the document splits into more than one unit — its sole purpose is holding one rendering steady across separate calls.
 
