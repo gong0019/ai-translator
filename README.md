@@ -164,6 +164,8 @@ Configure the behavior in `config.json` or `~/.config/ai-translator/config.json`
 
 With `adaptive_quality_mode` on, a document of at least `adaptive_quality_min_chunks` units is redone only for objective defects — empty output, truncation, lost structure, changed numbers, or a repeated chunk. Short text keeps strict retries. Residue and glossary misses are excluded because in testing they almost always flagged correct text: brand names, acronyms, statistical notation, units.
 
+A source below `full_skill_min_tokens` gets the shared contract and the language-pair declaration only, without the grammar rules. Those rules are about long-sentence restructuring, paragraph structure, and cross-chunk consistency, none of which a single clause gives them to act on, and the full prompt runs about 900 tokens — translating a 16-token sentence with it spends the whole time on prefill. A short prompt is about 149 tokens instead.
+
 Generation is bounded by the source it translates (about 1.8x the source tokens) rather than always using `max_tokens`. Terminology planning runs only when the document splits into more than one unit — its sole purpose is holding one rendering steady across separate calls.
 
 `repeat_penalty_latin` applies only when the target is English, German, French, Spanish, Italian, or Russian. Those languages build sentences by repeating function words such as `the`, `of`, and `a`, and the main `repeat_penalty` of 1.08 pushes the model to drop articles and prepositions. Chinese, Japanese, and Korean targets keep 1.08. A lower configured value is never raised.

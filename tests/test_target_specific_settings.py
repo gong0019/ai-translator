@@ -143,5 +143,42 @@ class ConfigPersistenceTests(unittest.TestCase):
         self.assertEqual(payload["retry_max_source_tokens"], 400)
         self.assertEqual(payload["n_ctx"], 4096)
 
+
+class PromptSizeTests(unittest.TestCase):
+    def prompt_for(self, source, compact):
+        cli = object.__new__(translator_cli.TranslatorCLI)
+        cli.config = {"target_lang_key": "1"}
+        return cli.build_dynamic_prompt(source, compact=compact)[0]
+
+    def test_a_short_source_drops_the_grammar_rules(self):
+        short = "cut the generation from three passes to one"
+        compact = self.prompt_for(short, True)
+        full = self.prompt_for(short, False)
+        self.assertLess(len(compact) * 4, len(full))
+        # 契约和语向必须留下，规则才是可省的部分。
+        self.assertIn("Translate every source fact exactly once.", compact)
+        self.assertIn("ENGLISH → SIMPLIFIED CHINESE", compact)
+        self.assertNotIn("## GRAMMAR", compact)
+        self.assertIn("## GRAMMAR", full)
+
+    def test_the_threshold_decides_which_prompt_a_unit_gets(self):
+        config = translator_cli.DEFAULT_CONFIG
+        self.assertFalse(translator_cli.wants_full_skill(config, 16))
+        self.assertFalse(translator_cli.wants_full_skill(config, 79))
+        self.assertTrue(translator_cli.wants_full_skill(config, 80))
+        self.assertTrue(translator_cli.wants_full_skill(config, 1424))
+
+    def test_an_invalid_threshold_falls_back_to_the_default(self):
+        self.assertTrue(translator_cli.wants_full_skill({"full_skill_min_tokens": "x"}, 80))
+        self.assertFalse(translator_cli.wants_full_skill({"full_skill_min_tokens": -1}, 79))
+
+    def test_a_glossary_still_reaches_a_compact_prompt(self):
+        cli = object.__new__(translator_cli.TranslatorCLI)
+        cli.config = {"target_lang_key": "1"}
+        prompt = cli.build_dynamic_prompt(
+            "Reuters reported.", {"Reuters": "路透社"}, compact=True
+        )[0]
+        self.assertIn("- Reuters => 路透社", prompt)
+
 if __name__ == "__main__":
     unittest.main()

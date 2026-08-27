@@ -138,6 +138,7 @@ DEFAULT_CONFIG = {
     "quality_retry_limit": 1,
     "adaptive_quality_mode": True,
     "adaptive_quality_min_chunks": 5,
+    "full_skill_min_tokens": 80,
 }
 
 # 值得再生成一遍的缺陷。残留和术语缺失被排除在外：柳叶刀实测里它们的报告
@@ -165,6 +166,30 @@ def retryable_errors_for_document(config: dict, chunk_count: int):
     if type(minimum) is not int or minimum < 1:
         minimum = DEFAULT_CONFIG["adaptive_quality_min_chunks"]
     return FAST_DOCUMENT_RETRY_ERRORS if enabled and chunk_count >= minimum else None
+
+def _skill_intro(skill: str) -> str:
+    """The durable contract, without the sectioned rules that follow it."""
+    return skill.split("\n## ", 1)[0].rstrip()
+
+
+def _skill_scope(skill: str) -> str:
+    """Just the language-pair declaration, without the grammar rules."""
+    return skill.split("\n## GRAMMAR", 1)[0].rstrip()
+
+
+def wants_full_skill(config: dict, source_tokens: int) -> bool:
+    """Decide whether the grammar rules earn their place in the prompt.
+
+    They run about 900 tokens. Translating one short sentence with them costs
+    roughly fifty times more prompt than source, and every rule they add is
+    about long-sentence restructuring or paragraph structure — nothing a single
+    clause gives them to act on.
+    """
+    threshold = config.get("full_skill_min_tokens")
+    if type(threshold) is not int or threshold < 0:
+        threshold = DEFAULT_CONFIG["full_skill_min_tokens"]
+    return source_tokens >= threshold
+
 
 # 拉丁与西里尔字母译文靠 the/of/a/в/на 这类功能词的高频重复成句，
 # 1.08 的重复惩罚会推动模型省略冠词和介词，因此这些目标语言单列。
@@ -699,18 +724,24 @@ class TranslatorCLI:
             pair_key = f"{source_code}_to_{target_code}"
         return source_name, target_name, target_code, pair_key
 
-    def build_dynamic_prompt(self, text: str, glossary=None):
+    def build_dynamic_prompt(self, text: str, glossary=None, compact: bool = False):
         source_name, target_name, _, pair_key = self._resolve_translation_route(text)
-        
+
         base_template = load_skill("base")
         if not base_template:
             base_template = "You are a professional {source_name}-to-{target_name} translator.\nTASK: Translate the user's input text into {target_name}."
-        
+
         base_prompt = base_template.replace("{source_name}", source_name).replace("{target_name}", target_name)
-        
+
         # 拼接专属专项 Skill
         skill_prompt = load_skill(pair_key)
-        
+
+        if compact:
+            # 语法规则讲的是长句拆分、段落结构和跨段一致，一句话没有对应的
+            # 对象。对短输入它们只是把提示词撑到原文的几十倍，全部时间花在预填上。
+            base_prompt = _skill_intro(base_prompt)
+            skill_prompt = _skill_scope(skill_prompt)
+
         if skill_prompt:
             final_prompt = f"{base_prompt}\n\n{skill_prompt}"
         else:
@@ -997,9 +1028,11 @@ class TranslatorCLI:
                 # 只注入本单元命中的术语。整份文档的术语表会让每个单元都背上
                 # 全部条目，长稿件里这一项就能把提示词吹大好几倍。
                 unit_glossary = match_curated_terms(unit, glossary)
+                unit_tokens = self._count_tokens(unit)
                 system_prompt, _, _ = self.build_dynamic_prompt(
                     unit,
                     unit_glossary,
+                    compact=not wants_full_skill(self.config, unit_tokens),
                 )
                 context = format_previous_context(
                     last_sentence(previous_source),
@@ -1007,7 +1040,6 @@ class TranslatorCLI:
                 )
                 if context:
                     system_prompt = f"{system_prompt}\n\n{context}"
-                unit_tokens = self._count_tokens(unit)
                 unit_max_tokens = resolve_max_tokens(self.config, unit_tokens)
                 unit_retry_limit = (
                     retry_limit if allows_repair(self.config, unit_tokens) else 0
